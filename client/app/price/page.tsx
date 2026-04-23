@@ -9,39 +9,40 @@ import {
 import { cn } from "@/lib/utils";
 
 const plans = [
-	{
-		name: "Free Plan",
-		price: "0",
-		period: null,
-		description:
-			"Recommended for people with at least 1 year experience in crypto markets.",
-		features: [
-			"Randomised matching only — no filters",
-			"Standard queue position (behind paid users)",
-			"No session history",
-			"Moderation still applies identically",
-		],
-		cta: "Get started for free",
-		dark: false,
-		badge: null,
-	},
-	{
-		name: "Prime",
-		price: "$9.99",
-		period: "/month",
-		description:
-			"Recommended for people with at least 1 year experience in crypto markets.",
-		features: [
-			"Dedicated filter system (matches your preferences)",
-			"Priority queue",
-			"Personalized portfolio reviews",
-			"Invitations to premium webinars",
-			"Access to exclusive industry reports",
-		],
-		cta: "Get started",
-		dark: true,
-		badge: "Most Popular",
-	},
+  {
+    name: "Free Plan",
+    price: "0",
+    period: null,
+    description:
+      "Meet random people instantly, with optional boosts for better matches.",
+    features: [
+      "Random video matching",
+      "Standard queue",
+      "Watch ads to unlock preference matching",
+      "Limited-time boosted matches",
+      "Community moderation",
+    ],
+    cta: "Start chatting",
+    dark: false,
+    badge: null,
+  },
+  {
+    name: "Prime",
+    price: "$9.99",
+    period: "/month",
+    description:
+      "Consistent, high-quality matching without interruptions.",
+    features: [
+      "Always-on preference matching",
+      "Priority queue (instant connections)",
+      "Reconnect with past matches",
+      "No ads",
+      "HD video quality",
+    ],
+    cta: "Go Prime",
+    dark: true,
+    badge: "Most Popular",
+  },
 ];
 
 export default function PricingCards() {
