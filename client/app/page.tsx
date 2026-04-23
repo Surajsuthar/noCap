@@ -53,7 +53,6 @@ function VideoFrame({ hue, initial, small = false }: { hue: string; initial: str
           backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,1) 2px, rgba(255,255,255,1) 3px)",
         }}
       />
-      {/* Avatar placeholder */}
       <div
         className={`relative z-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center font-bold text-white/70 ${
           small ? "h-8 w-8 text-xs" : "h-16 w-16 text-xl"

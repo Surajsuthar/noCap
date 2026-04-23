@@ -1,7 +1,7 @@
-from pydentic_settings import Settings
+from pydentic_settings import BaseSettings
 
 
-class Config(Settings):
+class Settings(BaseSettings):
 	DATABASE_URL: str
 	REDIS_URL: str
 	SECRET: str
@@ -9,4 +9,4 @@ class Config(Settings):
 	class Config:
 		env_file = ".env"
 
-config = Config()
+config = Settings()
