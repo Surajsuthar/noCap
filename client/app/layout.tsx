@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Oxanium, Source_Code_Pro } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { Analytics } from "@vercel/analytics/next"
 
 
 const fontSans = Oxanium({
@@ -63,6 +64,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <ThemeProvider>
+          <Analytics/>
           {children}
         </ThemeProvider>
       </body>
