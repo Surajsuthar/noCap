@@ -8,6 +8,7 @@ const footerLinks = [
   { label: "Pricing", href: "/price" },
   { label: "About Us", href: "/about-us" },
   { label: "Terms", href: "/terms" },
+  { label: "Privacy Policy", href: "/privacy-policy" },
 ];
 
 const testimonials = [
@@ -176,7 +177,7 @@ export default function Home() {
               <div className="space-y-3 max-w-md">
                 <h1 className="text-4xl font-bold leading-tight tracking-tight">
                   Talk to anyone.{" "}
-                  <span className="text-white/55">Right now.</span>
+                  <span className="text-primary">Right now.</span>
                 </h1>
                 <p className="text-base text-white/60 leading-relaxed">
                   One click and you're face-to-face with a real stranger from
