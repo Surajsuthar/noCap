@@ -28,15 +28,9 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 
-/* ─────────────────────────────────────────────
-   Types
-───────────────────────────────────────────── */
 type LoginValues = z.input<typeof loginSchema>;
 type RegisterValues = z.input<typeof registerSchema>;
 
-/* ─────────────────────────────────────────────
-   Shared: PasswordInput
-───────────────────────────────────────────── */
 function PasswordInput({
   show,
   onToggle,
@@ -60,9 +54,6 @@ function PasswordInput({
   );
 }
 
-/* ─────────────────────────────────────────────
-   Login Form
-───────────────────────────────────────────── */
 export function LoginForm({
   className,
   ...props
@@ -203,9 +194,6 @@ export function LoginForm({
   );
 }
 
-/* ─────────────────────────────────────────────
-   Register Form
-───────────────────────────────────────────── */
 export function RegisterForm({
   className,
   ...props
