@@ -80,7 +80,7 @@ export default function AuthLayout({
           </span>
         </div>
 
-        <div className="w-full max-w-sm">{children}</div>
+        <div className="w-full max-w-md">{children}</div>
       </main>
     </div>
   );

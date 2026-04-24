@@ -58,6 +58,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     hashed_password: Mapped[str | None] = mapped_column(String)
+    age: Mapped[int | None] = mapped_column(Integer)
     blocked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     oauth_accounts: Mapped[list["OAuthAccount"]] = relationship(
