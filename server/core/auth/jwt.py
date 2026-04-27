@@ -3,6 +3,8 @@ from typing import Any
 
 from jose import JWTError, jwt
 
+from config import config
+
 ALGORITHM = "HS256"
 ACCESS_EXPIRE_MINUTES = 60 * 24
 REFRESH_EXPIRE_DAYS = 30
@@ -55,3 +57,6 @@ class JWTManager:
         if expected_type and token_type != expected_type:
             raise ValueError(f"Expected a {expected_type} token.")
         return payload
+
+
+jwt_manager = JWTManager(secret_key=config.SECRET)

@@ -1,33 +1,28 @@
-from contextlib import asynccontextmanager
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from server.core.config import config
-from server.core.database import Base, get_engine
-from server.core.route import router
+from config import config
+from core.health.endpoint import router as health_router
 
 
-@asynccontextmanager
-async def lifespan(_: FastAPI):
-    async with get_engine().begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    yield
+def add_cors_middleware(app: FastAPI) -> None:
+    if not config.CORS_ORIGINS:
+        return
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=config.CORS_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+def create_app() -> FastAPI:
+    app = FastAPI(
+        description="noCap backend API"
+    )
+    app.include_router(health_router)
+    return app
 
 
-app = FastAPI(title="NoCap API", lifespan=lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=config.cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.include_router(router)
-
-
-@app.get("/")
-async def root() -> dict[str, str]:
-    return {"message": "NoCap server is running."}
+app = create_app()

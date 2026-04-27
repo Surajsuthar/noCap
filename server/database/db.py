@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 
-from server.core.config import config
+from config import config
 
 
 def _normalize_database_url(url: str) -> str:
@@ -25,19 +25,17 @@ session_factory = None
 class Base(DeclarativeBase):
     pass
 
-
 async def get_db() -> AsyncIterator[AsyncSession]:
     factory = get_session_factory()
     async with factory() as db:
         yield db
-
 
 def get_engine():
     global engine
     if engine is None:
         try:
             engine = create_async_engine(
-                _normalize_database_url(config.database_url),
+                _normalize_database_url(config.DATABASE_URL),
                 future=True,
             )
         except ModuleNotFoundError as exc:
