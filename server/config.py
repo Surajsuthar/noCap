@@ -1,4 +1,5 @@
 import json
+from typing import Literal
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -14,6 +15,9 @@ class Settings(BaseSettings):
     POLAR_ACCESS_TOKEN: str = ""
     POLAR_SUCCESS_URL: str = ""
     CORS_ORIGINS: list[str] = []
+    UPSTASH_REDIS_REST_URL: str = ""
+    UPSTASH_REDIS_REST_TOKEN: str = ""
+    ENVIRONMENT: Literal["dev", "prod"] = "dev"
 
     @field_validator("CORS_ORIGINS", mode="before")
     def parse_cors(cls, v):
