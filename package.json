@@ -1,0 +1,32 @@
+{
+  "name": "nocap",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "format:check": "turbo run format:check",
+    "format:fix": "turbo run format:fix",
+    "lint": "turbo run lint",
+    "lint:fix": "turbo run lint:fix",
+    "typecheck": "turbo run typecheck",
+    "clean": "turbo run clean && rimraf node_modules"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Surajsuthar/noCap.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Surajsuthar/noCap/issues"
+  },
+  "packageManager": "bun@latest",
+  "homepage": "https://github.com/Surajsuthar/noCap#readme",
+  "workspaces": [
+    "client/*"
+  ]
+}

@@ -12,9 +12,7 @@ from config import config
 
 def _normalize_database_url(url: str) -> str:
     if url.startswith("postgresql://"):
-        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    if url.startswith("postgres://"):
-        return url.replace("postgres://", "postgresql+asyncpg://", 1)
+        return url.replace("postgresql://", "postgresql+psycopg://", 1)
     return url
 
 
@@ -33,10 +31,12 @@ async def get_db() -> AsyncIterator[AsyncSession]:
 def get_engine():
     global engine
     if engine is None:
+
         try:
             engine = create_async_engine(
                 _normalize_database_url(config.DATABASE_URL),
                 future=True,
+                pool_size=config.POOL_SIZE
             )
         except ModuleNotFoundError as exc:
             raise RuntimeError(

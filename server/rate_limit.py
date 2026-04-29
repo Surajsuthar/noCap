@@ -20,10 +20,10 @@ ROUTE_LIMITERS: dict[str, Ratelimit] = {
         limiter=SlidingWindow(max_requests=5, window=60),
         prefix="rl:auth",
     ),
-    "/api/upload": Ratelimit(
+    "/api/auth/login": Ratelimit(
         redis=redis_client.client,
         limiter=SlidingWindow(max_requests=20, window=60),
-        prefix="rl:upload",
+        prefix="rl:auth",
     ),
 }
 

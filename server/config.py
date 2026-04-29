@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     UPSTASH_REDIS_REST_URL: str = ""
     UPSTASH_REDIS_REST_TOKEN: str = ""
     ENVIRONMENT: Literal["dev", "prod"] = "dev"
+    POOL_SIZE: int = 10
 
     @field_validator("CORS_ORIGINS", mode="before")
     def parse_cors(cls, v):
