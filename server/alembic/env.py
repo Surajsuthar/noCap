@@ -2,6 +2,7 @@ from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
 
+import models.user  # noqa: F401 — registers User table with Base.metadata
 from alembic import context
 from config import config as settings
 from database.db import Base
