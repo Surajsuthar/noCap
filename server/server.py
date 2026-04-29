@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -6,6 +8,7 @@ from core.health.endpoint import router as health_router
 from rate_limit import RateLimitMiddleware
 from routes import router as api_router
 
+logger = logging.getLogger(__name__)
 
 def add_cors_middleware(app: FastAPI) -> None:
     if not config.CORS_ORIGINS:
