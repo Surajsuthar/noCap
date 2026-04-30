@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     UPSTASH_REDIS_REST_TOKEN: str = ""
     ENVIRONMENT: Literal["dev", "prod"] = "dev"
     POOL_SIZE: int = 10
+    RESEND_API_KEY: str = ""
+    RESEND_EMAIL: str = "onboarding@resend.dev"
 
     @field_validator("CORS_ORIGINS", mode="before")
     def parse_cors(cls, v):

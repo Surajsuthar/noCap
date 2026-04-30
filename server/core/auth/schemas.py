@@ -1,6 +1,6 @@
 from datetime import date
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from core.auth.utils import calculate_age
 
@@ -10,26 +10,8 @@ class CredintialRegister(BaseModel):
 
     first_name: str = Field(min_length=1, max_length=200)
     last_name: str = Field(min_length=1, max_length=200)
-    password: str = Field(min_length=8)
-    confirm_password: str = Field(min_length=8)
     dob: date
-    email: str
-
-    @field_validator("email")
-    @classmethod
-    def validate_email(cls, email: str) -> str:
-        normalized_email = email.strip().lower()
-        if "@" not in normalized_email:
-            raise ValueError("A valid email address is required.")
-        return normalized_email
-
-    @field_validator("confirm_password")
-    @classmethod
-    def validate_confirm_password(cls, confirm_password: str, info) -> str:
-        password = info.data.get("password")
-        if password and password != confirm_password:
-            raise ValueError("Passwords do not match.")
-        return confirm_password
+    email: EmailStr
 
     @field_validator("dob")
     @classmethod
@@ -42,16 +24,8 @@ class CredintialRegister(BaseModel):
 class CredintialLogin(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    email: str
-    password: str = Field(min_length=8)
+    email: EmailStr
 
-    @field_validator("email")
-    @classmethod
-    def validate_email(cls, email: str) -> str:
-        normalized_email = email.strip().lower()
-        if "@" not in normalized_email:
-            raise ValueError("A valid email address is required.")
-        return normalized_email
 
 
 class RefreshRequest(BaseModel):

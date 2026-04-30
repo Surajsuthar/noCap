@@ -13,6 +13,7 @@ from core.auth.schemas import (
 )
 from core.auth.service import AuthService
 from database.db import get_db
+from lib.utils.response import APIResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -25,7 +26,7 @@ DatabaseSession = Annotated[AsyncSession, Depends(get_db)]
 
 @router.post(
     "/signup",
-    response_model=TokenPairResponse,
+    response_model=APIResponse[TokenPairResponse],
     status_code=status.HTTP_201_CREATED,
     summary="Register a new user and receive a token pair",
 )
@@ -39,7 +40,8 @@ async def register(
 
 @router.post(
     "/login",
-    response_model=TokenPairResponse,
+    response_model=APIResponse[TokenPairResponse],
+    status_code=status.HTTP_200_OK,
     summary="Authenticate with email + password and receive a token pair",
     # 10 attempts per 15 minutes per IP — brute-force protection.
     # dependencies=[rate_limit(10, 900, namespace="auth:login")],
@@ -54,7 +56,8 @@ async def login(
 
 @router.post(
     "/refresh",
-    response_model=AccessTokenResponse,
+    response_model=APIResponse[AccessTokenResponse],
+    status_code=status.HTTP_200_OK,
     summary="Exchange a valid refresh token for a new access token",
     # 30 refreshes per 5 minutes per IP — generous for normal use,
     # but stops token-hammering from a single origin.
@@ -66,10 +69,10 @@ async def refresh(
 ) -> AccessTokenResponse:
     return await service.refresh(payload.refresh_token, session)
 
-
 @router.post(
     "/logout",
-    response_model=LogoutResponse,
+    response_model=APIResponse[LogoutResponse],
+    status_code=status.HTTP_200_OK,
     summary="Invalidate the current session (client-side token discard)",
     # No rate limit — logout is stateless and low-cost.
 )

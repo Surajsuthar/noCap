@@ -22,6 +22,6 @@ async def health(
         if await redis.client.ping() != "PONG":
             raise HTTPException(status_code=500, detail="Redis is not available")
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Redis is not available")
+        raise HTTPException(status_code=500, detail="Redis is not available") from e
 
     return {"status": "ok"}

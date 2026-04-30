@@ -64,11 +64,13 @@ class AuthService:
         payload: CredintialRegister,
         session: AsyncSession,
     ) -> User:
+
+        hashed_password = Hasher.get_password_hash(payload.password)
         return await self.repository.create_user(
             first_name=payload.first_name,
             last_name=payload.last_name,
             email=payload.email,
-            hashed_password=Hasher.get_password_hash(payload.password),
+            hashed_password=hashed_password,
             date_of_birth=payload.dob,
             age=calculate_age(payload.dob),
             session=session,
@@ -81,16 +83,16 @@ class AuthService:
 
     async def _authenticate_credentials(self, payload: CredintialLogin, session: AsyncSession) -> User:
         existing_user = await self.repository.get_user_by_email(payload.email, session)
-        if existing_user is None or not existing_user.password:
+        if existing_user is None and existing_user.is_email_verified:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid email or password.",
+                detail="Email does not exist.",
             )
 
-        if not Hasher.verify_password(payload.password, existing_user.password):
+        if existing_user.is_blocked:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid email or password.",
+                detail="Account is blocked.",
             )
 
         return existing_user
