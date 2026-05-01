@@ -8,25 +8,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import config
 from core.auth.schemas import (
     AccessTokenResponse,
-    CallbackRequest,
     CredintialLogin,
     CredintialRegister,
     LogoutResponse,
     MagicLinkRequest,
     MagicLinkResponse,
     RefreshRequest,
-    TokenPairResponse,
 )
 from core.auth.service import AuthService
+from core.auth.utils import (
+    ACCESS_TOKEN_COOKIE,
+    REFRESH_TOKEN_COOKIE,
+    set_session_cookies,
+)
 from database.db import get_db
 from lib.utils.response import APIResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-ACCESS_TOKEN_COOKIE = "nocap_access_token"
-REFRESH_TOKEN_COOKIE = "nocap_refresh_token"
-ACCESS_TOKEN_MAX_AGE = 60 * 60 * 24
-REFRESH_TOKEN_MAX_AGE = 60 * 60 * 24 * 30
+
 
 def get_auth_service() -> AuthService:
     return AuthService()
@@ -36,28 +36,6 @@ AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 DatabaseSession = Annotated[AsyncSession, Depends(get_db)]
 
 logger = logging.getLogger(__name__)
-
-def set_session_cookies(response: Response, token_pair: TokenPairResponse) -> None:
-    secure = config.ENVIRONMENT == "prod"
-    response.set_cookie(
-        key=ACCESS_TOKEN_COOKIE,
-        value=token_pair.access_token,
-        max_age=ACCESS_TOKEN_MAX_AGE,
-        httponly=True,
-        secure=secure,
-        samesite="lax",
-        path="/",
-    )
-    response.set_cookie(
-        key=REFRESH_TOKEN_COOKIE,
-        value=token_pair.refresh_token,
-        max_age=REFRESH_TOKEN_MAX_AGE,
-        httponly=True,
-        secure=secure,
-        samesite="lax",
-        path="/",
-    )
-
 
 @router.post(
     "/signup",
@@ -189,7 +167,4 @@ async def logout(response: Response) -> APIResponse[LogoutResponse]:
     # Add a Redis deny-list here if server-side revocation is ever required.
     response.delete_cookie(ACCESS_TOKEN_COOKIE, path="/")
     response.delete_cookie(REFRESH_TOKEN_COOKIE, path="/")
-    data = LogoutResponse(
-        message="Logged out successfully. Discard your access and refresh tokens."
-    )
-    return APIResponse(success=True, message=data.message, data=data)
+    return APIResponse(success=True, message="Logged out successfully.")

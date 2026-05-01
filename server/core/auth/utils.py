@@ -1,6 +1,10 @@
 from datetime import date, datetime, timezone
 
+from fastapi import Response
 from passlib.context import CryptContext
+
+from config import config
+from core.auth.schemas import TokenPairResponse
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -18,3 +22,30 @@ class Hasher:
     @staticmethod
     def get_password_hash(password: str) -> str:
         return pwd_context.hash(password)
+
+
+ACCESS_TOKEN_COOKIE = "nocap_access_token"
+REFRESH_TOKEN_COOKIE = "nocap_refresh_token"
+ACCESS_TOKEN_MAX_AGE = 60 * 60 * 24
+REFRESH_TOKEN_MAX_AGE = 60 * 60 * 24 * 30
+
+def set_session_cookies(response: Response, token_pair: TokenPairResponse) -> None:
+    secure = config.ENVIRONMENT == "prod"
+    response.set_cookie(
+        key=ACCESS_TOKEN_COOKIE,
+        value=token_pair.access_token,
+        max_age=ACCESS_TOKEN_MAX_AGE,
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+        path="/",
+    )
+    response.set_cookie(
+        key=REFRESH_TOKEN_COOKIE,
+        value=token_pair.refresh_token,
+        max_age=REFRESH_TOKEN_MAX_AGE,
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+        path="/",
+    )

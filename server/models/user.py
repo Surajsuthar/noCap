@@ -38,6 +38,7 @@ class User(Base, TimestampMixin):
         nullable=True,
         default=None,
     )
+    avatar_url: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     @property
     def full_name(self) -> str:
