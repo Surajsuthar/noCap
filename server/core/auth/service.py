@@ -1,6 +1,9 @@
+from urllib.parse import urlencode
+
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import config
 from core.auth.jwt import jwt_manager
 from core.auth.repository import AuthRepository
 from core.auth.schemas import (
@@ -8,9 +11,11 @@ from core.auth.schemas import (
     AuthUserResponse,
     CredintialLogin,
     CredintialRegister,
+    MagicLinkResponse,
     TokenPairResponse,
 )
 from core.auth.utils import calculate_age
+from lib.email.client import client as email_client
 from models.user import User
 
 
@@ -38,6 +43,18 @@ class AuthService:
             user=cls._build_user_response(user),
         )
 
+    @staticmethod
+    def _build_magic_link(token: str) -> str:
+        separator = "&" if "?" in config.MAGIC_LINK_CALLBACK_URL else "?"
+        return f"{config.MAGIC_LINK_CALLBACK_URL}{separator}{urlencode({'token': token})}"
+
+    @staticmethod
+    def _magic_link_response(magic_link: str) -> MagicLinkResponse:
+        return MagicLinkResponse(
+            message="Magic link sent. Check your email to continue.",
+            magic_link=magic_link if config.ENVIRONMENT == "dev" else None,
+        )
+
     async def _fetch_user_or_401(self, user_id: str, session: AsyncSession) -> User:
         user = await self.repository.get_user_by_id(user_id, session)
         if user is None:
@@ -52,7 +69,7 @@ class AuthService:
         self,
         payload: CredintialRegister,
         session: AsyncSession,
-    ) -> User:
+    ) -> MagicLinkResponse:
         existing_user = await self.repository.get_user_by_email(payload.email, session)
 
         if existing_user is not None:
@@ -76,7 +93,7 @@ class AuthService:
                 detail="Failed to create user.",
             )
 
-        return user
+        return await self.generate_verification_email(user.email, session)
 
     async def _authenticate_credentials(self, payload: CredintialLogin, session: AsyncSession) -> User:
         existing_user = await self.repository.get_user_by_email(payload.email, session)
@@ -86,7 +103,7 @@ class AuthService:
                 detail="Email does not exist.",
             )
 
-        if not existing_user.is_email_verified or existing_user.is_blocked:
+        if existing_user.is_blocked:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Account is blocked.",
@@ -94,9 +111,9 @@ class AuthService:
 
         return existing_user
 
-    async def login(self, payload: CredintialLogin, session: AsyncSession) -> TokenPairResponse:
+    async def login(self, payload: CredintialLogin, session: AsyncSession) -> MagicLinkResponse:
         user = await self._authenticate_credentials(payload, session)
-        return self._build_auth_response(user)
+        return await self.generate_verification_email(user.email, session)
 
     async def refresh(
         self, refresh_token: str, session: AsyncSession
@@ -130,14 +147,14 @@ class AuthService:
         )
 
     async def callback(self, token: str, session: AsyncSession) -> TokenPairResponse:
-        verify_token = jwt_manager.decode_token(token, expected_type="access")
-
-        if not verify_token:
+        try:
+            verify_token = jwt_manager.decode_token(token, expected_type="magic_link")
+        except ValueError as exc:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token payload.",
+                detail=str(exc),
                 headers={"WWW-Authenticate": "Bearer"},
-            )
+            ) from exc
 
         user_id: str | None = verify_token.get("sub")
         if not user_id:
@@ -149,10 +166,12 @@ class AuthService:
 
         user = await self._fetch_user_or_401(user_id, session)
 
-        if not user:
+        token_email: str | None = verify_token.get("email")
+        if token_email != user.email:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token payload.",
+                headers={"WWW-Authenticate": "Bearer"},
             )
 
         verified = await self.repository.verify_user_email(user.email, session)
@@ -165,5 +184,28 @@ class AuthService:
 
         return self._build_auth_response(user)
 
-    async def generate_verification_email(self, email: str, session: AsyncSession) -> None:
-        pass
+    async def generate_verification_email(self, email: str, session: AsyncSession) -> MagicLinkResponse:
+        user = await self.repository.get_user_by_email(email, session)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found.",
+            )
+
+        if user.is_blocked:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Account is blocked.",
+            )
+
+        token = jwt_manager.create_magic_link_token(subject=str(user.id), email=user.email)
+        magic_link = self._build_magic_link(token)
+
+        if config.RESEND_API_KEY:
+            email_client.send_magic_link(
+                to=user.email,
+                name=user.first_name or user.email,
+                magic_link=magic_link,
+            )
+
+        return self._magic_link_response(magic_link)

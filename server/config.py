@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     POOL_SIZE: int = 10
     RESEND_API_KEY: str = ""
     RESEND_EMAIL: str = "onboarding@resend.dev"
+    MAGIC_LINK_CALLBACK_URL: str = "http://localhost:8000/api/auth/callback"
+    MAGIC_LINK_CLIENT_REDIRECT_URL: str = "http://localhost:3000/chat"
 
     @field_validator("CORS_ORIGINS", mode="before")
     def parse_cors(cls, v):

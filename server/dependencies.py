@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,14 +9,23 @@ from core.auth.repository import AuthRepository
 from database.db import get_db
 from models.user import User
 
-bearer_scheme = HTTPBearer()
+ACCESS_TOKEN_COOKIE = "nocap_access_token"
+
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
+    request: Request,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> User:
-    token = credentials.credentials
+    token = credentials.credentials if credentials else request.cookies.get(ACCESS_TOKEN_COOKIE)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     try:
         payload = jwt_manager.decode_token(token, expected_type="access")

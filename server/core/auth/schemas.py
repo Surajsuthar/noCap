@@ -27,6 +27,16 @@ class CredintialLogin(BaseModel):
     email: EmailStr
 
 
+class MagicLinkRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    email: EmailStr
+
+
+class MagicLinkResponse(BaseModel):
+    message: str
+    magic_link: str | None = None
+
 
 class RefreshRequest(BaseModel):
     refresh_token: str

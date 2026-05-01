@@ -8,6 +8,7 @@ from config import config
 ALGORITHM = "HS256"
 ACCESS_EXPIRE_MINUTES = 60 * 24
 REFRESH_EXPIRE_DAYS = 30
+MAGIC_LINK_EXPIRE_MINUTES = 15
 
 
 class JWTManager:
@@ -27,6 +28,14 @@ class JWTManager:
             subject=subject,
             token_type="refresh",
             expires_delta=timedelta(days=REFRESH_EXPIRE_DAYS),
+        )
+
+    def create_magic_link_token(self, subject: str, email: str) -> str:
+        return self._create_token(
+            subject=subject,
+            token_type="magic_link",
+            expires_delta=timedelta(minutes=MAGIC_LINK_EXPIRE_MINUTES),
+            extra_claims={"email": email},
         )
 
     def _create_token(
