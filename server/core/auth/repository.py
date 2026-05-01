@@ -49,7 +49,6 @@ class AuthRepository:
         first_name: str,
         last_name: str,
         email: str,
-        hashed_password: str,
         date_of_birth: date,
         age: int,
         session: AsyncSession,
@@ -58,7 +57,6 @@ class AuthRepository:
             first_name=first_name,
             last_name=last_name,
             email=email,
-            password=hashed_password,
             date_of_birth=date_of_birth,
             age=age,
         )

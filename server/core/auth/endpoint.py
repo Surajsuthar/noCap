@@ -69,6 +69,18 @@ async def refresh(
 ) -> AccessTokenResponse:
     return await service.refresh(payload.refresh_token, session)
 
+
+@router.post(
+    "/resend",
+    response_model=APIResponse[None],
+    status_code=status.HTTP_200_OK,
+    summary="Resend the verification email",
+)
+async def resend_verification(
+) -> None:
+    pass
+
+
 @router.post(
     "/logout",
     response_model=APIResponse[LogoutResponse],
