@@ -53,7 +53,7 @@ function MagicLinkSent({
           <span className="font-medium text-foreground break-all">{email}</span>
           .
           <br />
-          Click it to verify and get started — no password needed.
+          Click it to verify and get started.
         </p>
       </div>
 
@@ -80,6 +80,7 @@ export function LoginForm({
   ...props
 }: React.ComponentProps<"div">) {
   const [sentTo, setSentTo] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
@@ -141,7 +142,7 @@ export function LoginForm({
                     className="w-full"
                     disabled={form.formState.isSubmitting}
                   >
-                    Send magic link
+                    Login
                   </Button>
                   <div className="relative flex items-center gap-3">
                     <div className="h-px flex-1 bg-border" />
