@@ -1,9 +1,9 @@
 from logging.config import fileConfig
 
+from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-import models.user  # noqa: F401 — registers User table with Base.metadata
-from alembic import context
+import models.user
 from config import config as settings
 from database.db import Base
 
@@ -26,11 +26,11 @@ target_metadata = Base.metadata
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
+
 config.set_main_option(
     "sqlalchemy.url",
     settings.DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 )
-
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.

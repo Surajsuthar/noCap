@@ -21,9 +21,10 @@ class TimestampMixin:
 class User(Base, TimestampMixin):
     __tablename__ = "users"
 
-    id: Mapped[BigInteger] = mapped_column(
+    id: Mapped[int] = mapped_column(
         BigInteger,
-        primary_key=True
+        primary_key=True,
+        autoincrement=True,
     )
     first_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     last_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
