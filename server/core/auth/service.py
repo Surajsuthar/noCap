@@ -52,7 +52,7 @@ class AuthService:
         self,
         payload: CredintialRegister,
         session: AsyncSession,
-    ) -> TokenPairResponse:
+    ) -> User:
         existing_user = await self.repository.get_user_by_email(payload.email, session)
 
         if existing_user is not None:
@@ -69,7 +69,14 @@ class AuthService:
             age=calculate_age(payload.dob),
             session=session,
         )
-        return self._build_auth_response(user)
+
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create user.",
+            )
+
+        return user
 
     async def _authenticate_credentials(self, payload: CredintialLogin, session: AsyncSession) -> User:
         existing_user = await self.repository.get_user_by_email(payload.email, session)
@@ -121,6 +128,42 @@ class AuthService:
                 extra_claims={"email": user.email},
             ),
         )
+
+    async def callback(self, token: str, session: AsyncSession) -> TokenPairResponse:
+        verify_token = jwt_manager.decode_token(token, expected_type="access")
+
+        if not verify_token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token payload.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        user_id: str | None = verify_token.get("sub")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token payload.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        user = await self._fetch_user_or_401(user_id, session)
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+
+        verified = await self.repository.verify_user_email(user.email, session)
+
+        if not verified:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email not verified",
+            )
+
+        return self._build_auth_response(user)
 
     async def generate_verification_email(self, email: str, session: AsyncSession) -> None:
         pass

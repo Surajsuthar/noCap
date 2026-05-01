@@ -1,3 +1,4 @@
+from this import s
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
@@ -5,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.auth.schemas import (
     AccessTokenResponse,
+    CallbackRequest,
     CredintialLogin,
     CredintialRegister,
     LogoutResponse,
@@ -14,6 +16,7 @@ from core.auth.schemas import (
 from core.auth.service import AuthService
 from database.db import get_db
 from lib.utils.response import APIResponse
+from models.user import User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -26,7 +29,6 @@ DatabaseSession = Annotated[AsyncSession, Depends(get_db)]
 
 @router.post(
     "/signup",
-    response_model=APIResponse[TokenPairResponse],
     status_code=status.HTTP_201_CREATED,
     summary="Register a new user and receive a token pair",
 )
@@ -34,8 +36,12 @@ async def register(
     payload: CredintialRegister,
     session: DatabaseSession,
     service: AuthServiceDep,
-) -> TokenPairResponse:
-    return await service.register(payload, session)
+) -> APIResponse:
+    user = await service.register(payload, session)
+    if not user:
+        return APIResponse(success=False, message="User registration failed")
+    return APIResponse(success=True, message="User registered successfully")
+
 
 
 @router.post(
@@ -79,6 +85,21 @@ async def refresh(
 async def resend_verification(
 ) -> None:
     pass
+
+
+@router.post(
+    "/callback/",
+    response_model=APIResponse[TokenPairResponse],
+    status_code=status.HTTP_200_OK,
+    summary="OAuth2 callback",
+)
+async def callback(
+    token: str,
+    payload: CallbackRequest,
+    session: DatabaseSession,
+    service: AuthServiceDep,
+) -> CallbackRequest:
+    return payload
 
 
 @router.post(

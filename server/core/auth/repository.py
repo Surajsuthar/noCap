@@ -43,6 +43,19 @@ class AuthRepository:
         except SQLAlchemyError as exc:
             raise exc
 
+    async def verify_user_email(
+        self, email: str, session: AsyncSession
+    ) -> bool:
+        try:
+            user = await self.get_user_by_email(email, session)
+            if user:
+                user.email_verified = True
+                await session.commit()
+                return True
+            return False
+        except SQLAlchemyError as exc:
+            raise exc
+
     async def create_user(
         self,
         *,

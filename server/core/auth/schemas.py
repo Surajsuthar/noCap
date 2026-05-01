@@ -42,6 +42,8 @@ class AuthUserResponse(BaseModel):
     email_verified: bool
     age: int | None
 
+class CallbackRequest(BaseModel):
+    token: str
 
 class TokenPairResponse(BaseModel):
     access_token: str
