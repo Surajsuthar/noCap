@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response, status
@@ -34,6 +35,7 @@ def get_auth_service() -> AuthService:
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 DatabaseSession = Annotated[AsyncSession, Depends(get_db)]
 
+logger = logging.getLogger(__name__)
 
 def set_session_cookies(response: Response, token_pair: TokenPairResponse) -> None:
     secure = config.ENVIRONMENT == "prod"
@@ -141,19 +143,19 @@ async def resend_verification(
     return APIResponse(success=True, message=data.message, data=data)
 
 
-@router.post(
-    "/callback",
-    response_model=APIResponse[TokenPairResponse],
-    status_code=status.HTTP_200_OK,
-    summary="Consume a magic link token",
-)
-async def callback(
-    payload: CallbackRequest,
-    session: DatabaseSession,
-    service: AuthServiceDep,
-) -> APIResponse[TokenPairResponse]:
-    data = await service.callback(payload.token, session)
-    return APIResponse(success=True, message="Authenticated successfully.", data=data)
+# @router.post(
+#     "/callback",
+#     response_model=APIResponse[TokenPairResponse],
+#     status_code=status.HTTP_200_OK,
+#     summary="Consume a magic link token",
+# )
+# async def callback(
+#     payload: CallbackRequest,
+#     session: DatabaseSession,
+#     service: AuthServiceDep,
+# ) -> APIResponse[TokenPairResponse]:
+#     data = await service.callback(payload.token, session)
+#     return APIResponse(success=True, message="Authenticated successfully.", data=data)
 
 
 @router.get(
