@@ -1,7 +1,7 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,10 +14,13 @@ from core.auth.schemas import (
     MagicLinkRequest,
     MagicLinkResponse,
     RefreshRequest,
+    TokenPairResponse,
 )
 from core.auth.service import AuthService
 from core.auth.utils import (
     ACCESS_TOKEN_COOKIE,
+    OAUTH_STATE_COOKIE,
+    OAUTH_STATE_MAX_AGE,
     REFRESH_TOKEN_COOKIE,
     set_session_cookies,
 )
@@ -48,11 +51,10 @@ async def register(
     session: DatabaseSession,
     service: AuthServiceDep,
 ) -> APIResponse[MagicLinkResponse]:
-    data = await service.register(payload, session)
+    await service.register(payload, session)
     return APIResponse(
         success=True,
         message="User registered successfully. Check your email to continue.",
-        data=data,
     )
 
 
@@ -168,3 +170,63 @@ async def logout(response: Response) -> APIResponse[LogoutResponse]:
     response.delete_cookie(ACCESS_TOKEN_COOKIE, path="/")
     response.delete_cookie(REFRESH_TOKEN_COOKIE, path="/")
     return APIResponse(success=True, message="Logged out successfully.")
+
+
+@router.post(
+    "/oauth2/google",
+    response_model=APIResponse[TokenPairResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Authenticate via Google OAuth2",
+)
+async def oauth2_google(
+    code: Annotated[str, Query(min_length=1)],
+    session: DatabaseSession,
+    service: AuthServiceDep,
+) -> APIResponse[TokenPairResponse]:
+    data = await service.exchange_google_code(code=code, session=session)
+    return APIResponse(success=True, message="Authenticated successfully.", data=data)
+
+@router.get(
+    "/oauth2/google",
+    status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+    summary="Redirect to Google OAuth2 login",
+)
+async def oauth2_google_redirect(service: AuthServiceDep) -> RedirectResponse:
+    state = service.create_oauth_state()
+    response = RedirectResponse(
+        url=service.build_google_authorization_url(state),
+        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+    )
+    response.set_cookie(
+        key=OAUTH_STATE_COOKIE,
+        value=state,
+        max_age=OAUTH_STATE_MAX_AGE,
+        httponly=True,
+        secure=config.ENVIRONMENT == "prod",
+        samesite="lax",
+        path="/",
+    )
+    return response
+
+
+@router.get(
+    "/oauth2/callback/google",
+    status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+    summary="Handle the Google OAuth2 callback",
+)
+async def oauth2_google_callback(
+    code: Annotated[str, Query(min_length=1)],
+    state: Annotated[str, Query(min_length=1)],
+    request: Request,
+    session: DatabaseSession,
+    service: AuthServiceDep,
+) -> RedirectResponse:
+    service.validate_oauth_state(state, request.cookies.get(OAUTH_STATE_COOKIE))
+    token_pair = await service.exchange_google_code(code=code, session=session)
+    redirect = RedirectResponse(
+        url=config.MAGIC_LINK_CLIENT_REDIRECT_URL,
+        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+    )
+    set_session_cookies(redirect, token_pair)
+    redirect.delete_cookie(OAUTH_STATE_COOKIE, path="/")
+    return redirect

@@ -9,6 +9,7 @@ ALGORITHM = "HS256"
 ACCESS_EXPIRE_MINUTES = 60 * 24
 REFRESH_EXPIRE_DAYS = 30
 MAGIC_LINK_EXPIRE_MINUTES = 15
+OAUTH_STATE_EXPIRE_MINUTES = 10
 
 
 class JWTManager:
@@ -37,6 +38,20 @@ class JWTManager:
             expires_delta=timedelta(minutes=MAGIC_LINK_EXPIRE_MINUTES),
             extra_claims={"email": email},
         )
+
+    def create_oauth_state_token(self) -> str:
+        return self._create_token(
+            subject="google_oauth",
+            token_type="oauth_state",
+            expires_delta=timedelta(minutes=OAUTH_STATE_EXPIRE_MINUTES),
+        )
+
+    def get_expiration(self, token: str) -> datetime | None:
+        payload = self.decode_token(token)
+        expires_at = payload.get("exp")
+        if expires_at is None:
+            return None
+        return datetime.fromtimestamp(int(expires_at), tz=timezone.utc)
 
     def _create_token(
         self,

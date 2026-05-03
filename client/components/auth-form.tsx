@@ -24,6 +24,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { authApi } from "@/lib/auth-api";
 import { loginSchema, registerSchema } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -34,9 +35,11 @@ type RegisterValues = z.input<typeof registerSchema>;
 function MagicLinkSent({
   email,
   onResend,
+  isResending,
 }: {
   email: string;
-  onResend: () => void;
+  onResend: () => void | Promise<void>;
+  isResending?: boolean;
 }) {
   return (
     <div className="flex flex-col items-center gap-5 py-6 text-center">
@@ -63,14 +66,30 @@ function MagicLinkSent({
           <button
             type="button"
             onClick={onResend}
+            disabled={isResending}
             className="font-medium text-primary underline-offset-4 hover:underline"
           >
-            Resend link
+            {isResending ? "Resending..." : "Resend link"}
           </button>{" "}
           or check your spam folder.
         </p>
       </div>
     </div>
+  );
+}
+
+function AuthError({ message }: { message: string | null }) {
+  if (!message) {
+    return null;
+  }
+
+  return (
+    <p
+      role="alert"
+      className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive"
+    >
+      {message}
+    </p>
   );
 }
 
@@ -81,16 +100,51 @@ export function LoginForm({
 }: React.ComponentProps<"div">) {
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isResending, setIsResending] = useState(false);
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "" },
   });
 
-  function onSubmit(values: LoginValues) {
-    // TODO: call magic-link auth API
-    console.log("magic link →", values);
-    setSentTo(values.email);
+  async function onSubmit(values: LoginValues) {
+    setError(null);
+
+    try {
+      await authApi.login(values);
+      setSentTo(values.email);
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "We could not send the magic link. Try again.",
+      );
+    }
+  }
+
+  async function resendMagicLink() {
+    if (!sentTo) {
+      return;
+    }
+
+    setError(null);
+    setIsResending(true);
+
+    try {
+      await authApi.resendMagicLink({ email: sentTo });
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "We could not resend the magic link. Try again.",
+      );
+    } finally {
+      setIsResending(false);
+    }
+  }
+
+  function continueWithGoogle() {
+    window.location.href = authApi.googleOAuthUrl();
   }
 
   return (
@@ -107,7 +161,14 @@ export function LoginForm({
 
         <CardContent>
           {sentTo ? (
-            <MagicLinkSent email={sentTo} onResend={() => setSentTo(null)} />
+            <div className="flex flex-col gap-4">
+              <MagicLinkSent
+                email={sentTo}
+                isResending={isResending}
+                onResend={resendMagicLink}
+              />
+              <AuthError message={error} />
+            </div>
           ) : (
             <Form {...form}>
               <form
@@ -142,17 +203,23 @@ export function LoginForm({
                     className="w-full"
                     disabled={form.formState.isSubmitting}
                   >
-                    Login
+                    {form.formState.isSubmitting ? "Sending..." : "Login"}
                   </Button>
                   <div className="relative flex items-center gap-3">
                     <div className="h-px flex-1 bg-border" />
                     <span className="text-xs text-muted-foreground">or</span>
                     <div className="h-px flex-1 bg-border" />
                   </div>
-                  <Button variant="outline" type="button" className="w-full">
+                  <Button
+                    variant="outline"
+                    type="button"
+                    className="w-full"
+                    onClick={continueWithGoogle}
+                  >
                     Continue with Google
                   </Button>
                 </div>
+                <AuthError message={error} />
               </form>
             </Form>
           )}
@@ -198,6 +265,8 @@ export function RegisterForm({
   ...props
 }: React.ComponentProps<"div">) {
   const [sentTo, setSentTo] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isResending, setIsResending] = useState(false);
 
   const form = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),
@@ -209,10 +278,44 @@ export function RegisterForm({
     },
   });
 
-  function onSubmit(values: RegisterValues) {
-    // TODO: call magic-link auth API
-    console.log("register magic link →", values);
-    setSentTo(values.email);
+  async function onSubmit(values: RegisterValues) {
+    setError(null);
+
+    try {
+      await authApi.register(values);
+      setSentTo(values.email);
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "We could not create your account. Try again.",
+      );
+    }
+  }
+
+  async function resendMagicLink() {
+    if (!sentTo) {
+      return;
+    }
+
+    setError(null);
+    setIsResending(true);
+
+    try {
+      await authApi.resendMagicLink({ email: sentTo });
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "We could not resend the magic link. Try again.",
+      );
+    } finally {
+      setIsResending(false);
+    }
+  }
+
+  function continueWithGoogle() {
+    window.location.href = authApi.googleOAuthUrl();
   }
 
   return (
@@ -229,7 +332,14 @@ export function RegisterForm({
 
         <CardContent>
           {sentTo ? (
-            <MagicLinkSent email={sentTo} onResend={() => setSentTo(null)} />
+            <div className="flex flex-col gap-4">
+              <MagicLinkSent
+                email={sentTo}
+                isResending={isResending}
+                onResend={resendMagicLink}
+              />
+              <AuthError message={error} />
+            </div>
           ) : (
             <Form {...form}>
               <form
@@ -327,17 +437,25 @@ export function RegisterForm({
                     className="w-full"
                     disabled={form.formState.isSubmitting}
                   >
-                    Create account
+                    {form.formState.isSubmitting
+                      ? "Creating..."
+                      : "Create account"}
                   </Button>
                   <div className="relative flex items-center gap-3">
                     <div className="h-px flex-1 bg-border" />
                     <span className="text-xs text-muted-foreground">or</span>
                     <div className="h-px flex-1 bg-border" />
                   </div>
-                  <Button variant="outline" type="button" className="w-full">
+                  <Button
+                    variant="outline"
+                    type="button"
+                    className="w-full"
+                    onClick={continueWithGoogle}
+                  >
                     Continue with Google
                   </Button>
                 </div>
+                <AuthError message={error} />
               </form>
             </Form>
           )}

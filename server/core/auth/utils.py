@@ -1,10 +1,13 @@
 from datetime import date, datetime, timezone
+from typing import TYPE_CHECKING
 
 from fastapi import Response
 from passlib.context import CryptContext
 
 from config import config
-from core.auth.schemas import TokenPairResponse
+
+if TYPE_CHECKING:
+    from core.auth.schemas import TokenPairResponse
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -26,10 +29,12 @@ class Hasher:
 
 ACCESS_TOKEN_COOKIE = "nocap_access_token"
 REFRESH_TOKEN_COOKIE = "nocap_refresh_token"
+OAUTH_STATE_COOKIE = "nocap_oauth_state"
 ACCESS_TOKEN_MAX_AGE = 60 * 60 * 24
 REFRESH_TOKEN_MAX_AGE = 60 * 60 * 24 * 30
+OAUTH_STATE_MAX_AGE = 60 * 10
 
-def set_session_cookies(response: Response, token_pair: TokenPairResponse) -> None:
+def set_session_cookies(response: Response, token_pair: "TokenPairResponse") -> None:
     secure = config.ENVIRONMENT == "prod"
     response.set_cookie(
         key=ACCESS_TOKEN_COOKIE,

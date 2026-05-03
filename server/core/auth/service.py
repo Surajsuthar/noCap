@@ -1,5 +1,7 @@
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
+import httpx
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,7 +18,12 @@ from core.auth.schemas import (
 )
 from core.auth.utils import calculate_age
 from lib.email.client import client as email_client
-from models.user import User
+from models.user import AuthSessionMethod, OAuthAccount, OAuthProvider, User
+
+GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
+GOOGLE_SCOPES = ("openid", "email", "profile")
 
 
 class AuthService:
@@ -41,6 +48,82 @@ class AuthService:
             access_token=jwt_manager.create_access_token(subject=subject, extra_claims={"email": user.email}),
             refresh_token=jwt_manager.create_refresh_token(subject=subject),
             user=cls._build_user_response(user),
+        )
+
+    @staticmethod
+    def _provider_token_expires_at(expires_in: int | None) -> datetime | None:
+        if expires_in is None:
+            return None
+        return datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+
+    @staticmethod
+    def _require_google_config() -> None:
+        missing = [
+            key
+            for key, value in {
+                "GOOGLE_CLIENT_ID": config.GOOGLE_CLIENT_ID,
+                "GOOGLE_CLIENT_SECRET": config.GOOGLE_CLIENT_SECRET,
+                "GOOGLE_REDIRECT_URI": config.GOOGLE_REDIRECT_URI,
+            }.items()
+            if not value
+        ]
+        if missing:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Missing Google OAuth config: {', '.join(missing)}.",
+            )
+
+    @staticmethod
+    def build_google_authorization_url(state: str) -> str:
+        AuthService._require_google_config()
+        params = {
+            "client_id": config.GOOGLE_CLIENT_ID,
+            "redirect_uri": config.GOOGLE_REDIRECT_URI,
+            "response_type": "code",
+            "scope": " ".join(GOOGLE_SCOPES),
+            "state": state,
+            "access_type": "offline",
+            "prompt": "consent",
+        }
+        return f"{GOOGLE_AUTH_URL}?{urlencode(params)}"
+
+    @staticmethod
+    def create_oauth_state() -> str:
+        return jwt_manager.create_oauth_state_token()
+
+    @staticmethod
+    def validate_oauth_state(state: str, expected_state: str | None) -> None:
+        if not expected_state or state != expected_state:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid OAuth state.",
+            )
+
+        try:
+            jwt_manager.decode_token(state, expected_type="oauth_state")
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=str(exc),
+            ) from exc
+
+    async def _persist_auth_session(
+        self,
+        *,
+        user: User,
+        token_pair: TokenPairResponse,
+        method: AuthSessionMethod,
+        session: AsyncSession,
+        oauth_account: OAuthAccount | None = None,
+    ) -> None:
+        await self.repository.create_auth_session(
+            user=user,
+            token_pair=token_pair,
+            method=method,
+            oauth_account=oauth_account,
+            access_token_expires_at=jwt_manager.get_expiration(token_pair.access_token),
+            refresh_token_expires_at=jwt_manager.get_expiration(token_pair.refresh_token),
+            session=session,
         )
 
     @staticmethod
@@ -95,25 +178,30 @@ class AuthService:
 
         return await self.generate_verification_email(user.email, session)
 
-    async def _authenticate_credentials(self, payload: CredintialLogin, session: AsyncSession) -> User:
-        existing_user = await self.repository.get_user_by_email(payload.email, session)
-        if existing_user is None:
+    async def login(self, payload: CredintialLogin, session: AsyncSession) -> TokenPairResponse:
+        user = await self.repository.get_user_by_email(payload.email, session)
+        if user is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Email does not exist.",
             )
 
-        if existing_user.is_blocked:
+        if user.is_blocked or not user.is_email_verified:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Account is blocked.",
             )
 
-        return existing_user
+        token_pair = self._build_auth_response(user)
+        await self._persist_auth_session(
+            user=user,
+            token_pair=token_pair,
+            method=AuthSessionMethod.google_oauth,
+            oauth_account=oauth_account,
+            session=session,
+        )
 
-    async def login(self, payload: CredintialLogin, session: AsyncSession) -> MagicLinkResponse:
-        user = await self._authenticate_credentials(payload, session)
-        return await self.generate_verification_email(user.email, session)
+        return token_pair
 
     async def refresh(
         self, refresh_token: str, session: AsyncSession
@@ -182,7 +270,14 @@ class AuthService:
                 detail="Email not verified",
             )
 
-        return self._build_auth_response(user)
+        token_pair = self._build_auth_response(user)
+        await self._persist_auth_session(
+            user=user,
+            token_pair=token_pair,
+            method=AuthSessionMethod.magic_link,
+            session=session,
+        )
+        return token_pair
 
     async def generate_verification_email(self, email: str, session: AsyncSession) -> MagicLinkResponse:
         user = await self.repository.get_user_by_email(email, session)
@@ -209,3 +304,110 @@ class AuthService:
             )
 
         return self._magic_link_response(magic_link)
+
+    async def exchange_google_code(
+        self,
+        *,
+        code: str,
+        session: AsyncSession,
+    ) -> TokenPairResponse:
+        AuthService._require_google_config()
+
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                token_response = await client.post(
+                    GOOGLE_TOKEN_URL,
+                    data={
+                        "code": code,
+                        "client_id": config.GOOGLE_CLIENT_ID,
+                        "client_secret": config.GOOGLE_CLIENT_SECRET,
+                        "redirect_uri": config.GOOGLE_REDIRECT_URI,
+                        "grant_type": "authorization_code",
+                    },
+                    headers={"Accept": "application/json"},
+                )
+                token_response.raise_for_status()
+                google_tokens = token_response.json()
+
+                userinfo_response = await client.get(
+                    GOOGLE_USERINFO_URL,
+                    headers={"Authorization": f"Bearer {google_tokens['access_token']}"},
+                )
+                userinfo_response.raise_for_status()
+                userinfo = userinfo_response.json()
+        except (httpx.HTTPError, KeyError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Google OAuth authentication failed.",
+            ) from exc
+
+        google_account_id = userinfo.get("sub")
+        email = userinfo.get("email")
+        if not google_account_id or not email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Google account did not return an email identity.",
+            )
+
+        existing_oauth_account = await self.repository.get_oauth_account(
+            provider=OAuthProvider.google,
+            account_id=google_account_id,
+            session=session,
+        )
+
+        user = (
+            await self.repository.get_user_by_id(existing_oauth_account.user_id, session)
+            if existing_oauth_account
+            else None
+        )
+        if user is None:
+            user = await self.repository.get_user_by_email(email, session)
+
+        first_name = userinfo.get("given_name")
+        last_name = userinfo.get("family_name")
+        avatar_url = userinfo.get("picture")
+        email_verified = bool(userinfo.get("email_verified"))
+
+        if user is None:
+            user = await self.repository.create_oauth_user(
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                avatar_url=avatar_url,
+                email_verified=email_verified,
+                session=session,
+            )
+        else:
+            if user.is_blocked:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Account is blocked.",
+                )
+            user = await self.repository.update_user_from_oauth(
+                user,
+                first_name=first_name,
+                last_name=last_name,
+                avatar_url=avatar_url,
+                email_verified=email_verified,
+                session=session,
+            )
+
+        oauth_account = await self.repository.upsert_oauth_account(
+            user=user,
+            provider=OAuthProvider.google,
+            account_id=google_account_id,
+            access_token=google_tokens.get("access_token"),
+            refresh_token=google_tokens.get("refresh_token"),
+            expires_at=self._provider_token_expires_at(google_tokens.get("expires_in")),
+            session=session,
+        )
+
+        token_pair = self._build_auth_response(user)
+        await self._persist_auth_session(
+            user=user,
+            token_pair=token_pair,
+            method=AuthSessionMethod.google_oauth,
+            oauth_account=oauth_account,
+            session=session,
+        )
+        return token_pair
