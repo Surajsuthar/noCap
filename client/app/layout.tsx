@@ -3,6 +3,7 @@ import { Oxanium, Source_Code_Pro } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { Analytics } from "@vercel/analytics/next"
+import QueryClientProviderWrapper from "@/components/providers/QueryClientProvider";
 
 
 const fontSans = Oxanium({
@@ -63,10 +64,12 @@ export default function RootLayout({
       className={`${fontSans.variable} ${fontMono.variable} antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <ThemeProvider>
-          <Analytics/>
-          {children}
-        </ThemeProvider>
+        <QueryClientProviderWrapper>
+          <ThemeProvider>
+            <Analytics />
+            {children}
+          </ThemeProvider>
+        </QueryClientProviderWrapper>
       </body>
     </html>
   );

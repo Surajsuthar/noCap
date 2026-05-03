@@ -196,8 +196,7 @@ class AuthService:
         await self._persist_auth_session(
             user=user,
             token_pair=token_pair,
-            method=AuthSessionMethod.google_oauth,
-            oauth_account=oauth_account,
+            method=AuthSessionMethod.magic_link,
             session=session,
         )
 
@@ -285,12 +284,6 @@ class AuthService:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found.",
-            )
-
-        if user.is_blocked:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Account is blocked.",
             )
 
         token = jwt_manager.create_magic_link_token(subject=str(user.id), email=user.email)

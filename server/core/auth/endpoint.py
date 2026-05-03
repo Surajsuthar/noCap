@@ -58,6 +58,25 @@ async def register(
     )
 
 
+@router.get(
+    "/callback/",
+    status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+    summary="Verify a magic link, create a session, and redirect to the client",
+)
+async def callback_from_magic_link(
+    token: Annotated[str, Query(min_length=1)],
+    session: DatabaseSession,
+    service: AuthServiceDep,
+) -> RedirectResponse:
+    token_pair = await service.callback(token, session)
+    response = RedirectResponse(
+        url=config.MAGIC_LINK_CLIENT_REDIRECT_URL,
+        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+    )
+    set_session_cookies(response, token_pair)
+    return response
+
+
 
 @router.post(
     "/login",
@@ -71,25 +90,9 @@ async def login(
     payload: CredintialLogin,
     session: DatabaseSession,
     service: AuthServiceDep,
-) -> APIResponse[MagicLinkResponse]:
+) -> APIResponse[TokenPairResponse]:
     data = await service.login(payload, session)
-    return APIResponse(success=True, message=data.message, data=data)
-
-
-@router.post(
-    "/magic-link",
-    response_model=APIResponse[MagicLinkResponse],
-    status_code=status.HTTP_200_OK,
-    summary="Send a magic link to an existing user",
-)
-async def magic_link(
-    payload: MagicLinkRequest,
-    session: DatabaseSession,
-    service: AuthServiceDep,
-) -> APIResponse[MagicLinkResponse]:
-    data = await service.generate_verification_email(payload.email, session)
-    return APIResponse(success=True, message=data.message, data=data)
-
+    return APIResponse(success=True, message="Login successful", data=data)
 
 @router.post(
     "/refresh",
@@ -138,25 +141,6 @@ async def resend_verification(
 #     return APIResponse(success=True, message="Authenticated successfully.", data=data)
 
 
-@router.get(
-    "/callback/",
-    status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-    summary="Verify a magic link, create a session, and redirect to the client",
-)
-async def callback_from_magic_link(
-    token: Annotated[str, Query(min_length=1)],
-    session: DatabaseSession,
-    service: AuthServiceDep,
-) -> RedirectResponse:
-    token_pair = await service.callback(token, session)
-    response = RedirectResponse(
-        url=config.MAGIC_LINK_CLIENT_REDIRECT_URL,
-        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-    )
-    set_session_cookies(response, token_pair)
-    return response
-
-
 @router.post(
     "/logout",
     response_model=APIResponse[LogoutResponse],
@@ -172,19 +156,19 @@ async def logout(response: Response) -> APIResponse[LogoutResponse]:
     return APIResponse(success=True, message="Logged out successfully.")
 
 
-@router.post(
-    "/oauth2/google",
-    response_model=APIResponse[TokenPairResponse],
-    status_code=status.HTTP_200_OK,
-    summary="Authenticate via Google OAuth2",
-)
-async def oauth2_google(
-    code: Annotated[str, Query(min_length=1)],
-    session: DatabaseSession,
-    service: AuthServiceDep,
-) -> APIResponse[TokenPairResponse]:
-    data = await service.exchange_google_code(code=code, session=session)
-    return APIResponse(success=True, message="Authenticated successfully.", data=data)
+# @router.post(
+#     "/oauth2/google",
+#     response_model=APIResponse[TokenPairResponse],
+#     status_code=status.HTTP_200_OK,
+#     summary="Authenticate via Google OAuth2",
+# )
+# async def oauth2_google(
+#     code: Annotated[str, Query(min_length=1)],
+#     session: DatabaseSession,
+#     service: AuthServiceDep,
+# ) -> APIResponse[TokenPairResponse]:
+#     data = await service.exchange_google_code(code=code, session=session)
+#     return APIResponse(success=True, message="Authenticated successfully.", data=data)
 
 @router.get(
     "/oauth2/google",

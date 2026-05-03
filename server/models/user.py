@@ -1,7 +1,16 @@
 from datetime import date, datetime, timezone
 from enum import StrEnum
 
-from sqlalchemy import TIMESTAMP, BigInteger, Boolean, Date, DateTime, Integer, String, Text
+from sqlalchemy import (
+    TIMESTAMP,
+    BigInteger,
+    Boolean,
+    Date,
+    DateTime,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.schema import UniqueConstraint
 from sqlalchemy.sql.schema import ForeignKey
