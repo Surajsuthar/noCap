@@ -1,8 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from ipaddress import ip_address
-from posixpath import devnull
 from urllib.parse import urlencode
-from webbrowser import get
 
 import httpx
 from fastapi import HTTPException, Request, status

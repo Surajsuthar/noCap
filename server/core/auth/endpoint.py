@@ -1,5 +1,4 @@
 import logging
-import re
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
@@ -15,7 +14,6 @@ from core.auth.schemas import (
     MagicLinkRequest,
     MagicLinkResponse,
     RefreshRequest,
-    TokenPairResponse,
 )
 from core.auth.service import AuthService
 from core.auth.utils import (
@@ -89,9 +87,9 @@ async def callback_from_magic_link(
 
 @router.post(
     "/login",
-    response_model=APIResponse[MagicLinkResponse],
+    response_model=APIResponse[None],
     status_code=status.HTTP_200_OK,
-    summary="Send a sign-in magic link",
+    summary="Login with email and verified user",
     # 10 attempts per 15 minutes per IP — brute-force protection.
     # dependencies=[rate_limit(10, 900, namespace="auth:login")],
 )
@@ -99,11 +97,15 @@ async def login(
     payload: CredintialLogin,
     session: DatabaseSession,
     service: AuthServiceDep,
+    request: Request,
     response: Response
-) -> Response:
-    token_pair = await service.login(payload, session)
-    set_session_cookies(response, token_pair)
-    return response
+) -> APIResponse[None]:
+    try:
+        token_pair = await service.login(payload, request, session)
+        set_session_cookies(response, token_pair)
+        return success_response(message="Login successfully")
+    except Exception as e:
+        return error_response(message="Login failed")
 
 @router.post(
     "/refresh",
@@ -133,8 +135,11 @@ async def resend_verification(
     session: DatabaseSession,
     service: AuthServiceDep,
 ) -> APIResponse[MagicLinkResponse]:
-    data = await service.generate_verification_email(payload.email, session)
-    return APIResponse(success=True, message=data.message, data=data)
+    try:
+        data = await service.generate_verification_email(payload.email, session)
+        return APIResponse(success=True, message=data.message )
+    except Exception as e:
+        return APIResponse(success=False, message="Failed to resend verification email", error=str(e))
 
 
 # @router.post(
