@@ -1,5 +1,7 @@
+import re
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
+from uuid import uuid4
 
 import httpx
 from fastapi import HTTPException, Request, status
@@ -16,7 +18,13 @@ from core.auth.schemas import (
     MagicLinkResponse,
     TokenPairResponse,
 )
-from core.auth.utils import calculate_age, get_client_ip, get_user_agent
+from core.auth.utils import (
+    OtpManager,
+    calculate_age,
+    get_client_ip,
+    get_user_agent,
+    hash_otp,
+)
 from lib.email.client import client as email_client
 from models.user import AuthSessionMethod, OAuthAccount, OAuthProvider, User
 
@@ -25,9 +33,10 @@ GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 GOOGLE_SCOPES = ("openid", "email", "profile")
 
+otp_manager = OtpManager()
 
 class AuthService:
-    def __init__(self, repository: AuthRepository | None = None):
+    def __init__(self, repository: AuthRepository | None = None ):
         self.repository = repository or AuthRepository()
 
     @staticmethod
@@ -182,7 +191,7 @@ class AuthService:
 
         return await self.generate_verification_email(user.email, session)
 
-    async def login(self, payload: CredintialLogin, request: Request, session: AsyncSession) -> TokenPairResponse:
+    async def login(self, payload: CredintialLogin, request: Request, session: AsyncSession) -> int:
         user = await self.repository.get_user_by_email(payload.email, session)
         if user is None:
             raise HTTPException(
@@ -196,20 +205,18 @@ class AuthService:
                 detail="Account is blocked.",
             )
 
-        token_pair = self._build_auth_response(user)
-        ip = get_client_ip(request)
-        user_agent = get_user_agent(request)
 
-        await self._persist_auth_session(
-            user=user,
-            token_pair=token_pair,
-            method=AuthSessionMethod.magic_link,
-            session=session,
-            ip_address=ip,
-            user_agent=user_agent,
+        otp = hash_otp()
+        await otp_manager.store_otp(user.id, otp)
+
+        email_client.send_magic_link(
+            to=user.email,
+            name=user.first_name or user.email,
+            magic_link=otp,
         )
 
-        return token_pair
+        return user.id
+
 
     async def refresh(
         self, refresh_token: str, session: AsyncSession
@@ -424,4 +431,34 @@ class AuthService:
             ip_address=get_client_ip(request),
             user_agent=request.headers.get("user-agent"),
         )
+        return token_pair
+
+    async def verify_otp(self, *, identifier: str, otp: str, request: Request, session: AsyncSession) -> TokenPairResponse:
+        """Verify OTP and complete the login process."""
+
+        is_valid = await otp_manager.verify_otp(identifier=identifier, otp=otp)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid OTP.",
+            )
+
+        user = await self.repository.get_user_by_email(email=identifier, session=session)
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid OTP.",
+            )
+
+        token_pair = self._build_auth_response(user)
+        await self._persist_auth_session(
+            user=user,
+            token_pair=token_pair,
+            method=AuthSessionMethod.magic_link,
+            session=session,
+            ip_address=get_client_ip(request),
+            user_agent=get_user_agent(request)
+        )
+
         return token_pair

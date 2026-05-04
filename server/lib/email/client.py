@@ -28,5 +28,12 @@ class EmailClient:
             html=sign_up_template(name=name, verification_link=magic_link),
         )
 
+    def send_otp(self, *, to: str, name: str, otp: str):
+        return self._send_email(
+            to=[to],
+            subject="Your NoCap OTP",
+            html=sign_up_template(name=name, verification_link=otp),
+        )
+
 
 client = EmailClient(config.RESEND_API_KEY, config.RESEND_EMAIL)

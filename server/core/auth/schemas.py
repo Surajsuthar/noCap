@@ -33,6 +33,13 @@ class MagicLinkRequest(BaseModel):
     email: EmailStr
 
 
+class OTPRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    otp: str
+    identifier: str
+
+
 class MagicLinkResponse(BaseModel):
     message: str
     magic_link: str | None = None

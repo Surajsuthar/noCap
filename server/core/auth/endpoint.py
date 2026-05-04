@@ -13,6 +13,7 @@ from core.auth.schemas import (
     LogoutResponse,
     MagicLinkRequest,
     MagicLinkResponse,
+    OTPRequest,
     RefreshRequest,
 )
 from core.auth.service import AuthService
@@ -89,7 +90,7 @@ async def callback_from_magic_link(
     "/login",
     response_model=APIResponse[None],
     status_code=status.HTTP_200_OK,
-    summary="Login with email and verified user",
+    summary="Login with email and verified user generated OTP",
     # 10 attempts per 15 minutes per IP — brute-force protection.
     # dependencies=[rate_limit(10, 900, namespace="auth:login")],
 )
@@ -98,10 +99,27 @@ async def login(
     session: DatabaseSession,
     service: AuthServiceDep,
     request: Request,
-    response: Response
 ) -> APIResponse[None]:
     try:
-        token_pair = await service.login(payload, request, session)
+        user_id = await service.login(payload, request, session)
+        return success_response(message="Login successfully", data={"request_id": user_id})
+    except Exception:
+        return error_response(message="Login failed")
+
+@router.post(
+    "/opt-verify",
+    response_model=APIResponse[None],
+    status_code=status.HTTP_200_OK,
+    summary="Opt-in to login verification",
+)
+async def opt_in_verification(
+    payload: OTPRequest,
+    session: DatabaseSession,
+    service: AuthServiceDep,
+    response: Response,
+) -> APIResponse[None]:
+    try:
+        token_pair = await service.verify_otp(identifier=payload.identifier, otp=payload.otp, session=session)
         set_session_cookies(response, token_pair)
         return success_response(message="Login successfully")
     except Exception as e:
@@ -222,7 +240,7 @@ async def oauth2_google_callback(
     service: AuthServiceDep,
 ) -> RedirectResponse:
     service.validate_oauth_state(state, request.cookies.get(OAUTH_STATE_COOKIE))
-    token_pair = await service.exchange_google_code(code=code, session=session)
+    token_pair = await service.exchange_google_code(code=code, request=request, session=session)
     redirect = RedirectResponse(
         url=config.MAGIC_LINK_CLIENT_REDIRECT_URL,
         status_code=status.HTTP_307_TEMPORARY_REDIRECT,
