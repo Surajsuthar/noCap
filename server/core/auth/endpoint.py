@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
@@ -25,7 +26,7 @@ from core.auth.utils import (
     set_session_cookies,
 )
 from database.db import get_db
-from lib.utils.response import APIResponse
+from lib.utils.response import APIResponse, error_response, success_response
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -42,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 @router.post(
     "/signup",
-    response_model=APIResponse[MagicLinkResponse],
+    response_model=APIResponse[None],
     status_code=status.HTTP_201_CREATED,
     summary="Register a new user and send a magic link",
 )
@@ -50,12 +51,13 @@ async def register(
     payload: CredintialRegister,
     session: DatabaseSession,
     service: AuthServiceDep,
-) -> APIResponse[MagicLinkResponse]:
-    await service.register(payload, session)
-    return APIResponse(
-        success=True,
-        message="User registered successfully. Check your email to continue.",
-    )
+) -> APIResponse[None]:
+    try:
+        await service.register(payload, session)
+    except Exception as e:
+        return error_response(message=str(e))
+
+    return success_response(message="User registered successfully. Check your email to continue.")
 
 
 @router.get(
@@ -67,15 +69,22 @@ async def callback_from_magic_link(
     token: Annotated[str, Query(min_length=1)],
     session: DatabaseSession,
     service: AuthServiceDep,
+    request: Request,
 ) -> RedirectResponse:
-    token_pair = await service.callback(token, session)
+    token_pair = await service.callback(token, request, session)
+
+    if not token_pair:
+        return RedirectResponse(
+            url=config.MAGIC_LINK_CLIENT_REDIRECT_URL,
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+        )
+
     response = RedirectResponse(
         url=config.MAGIC_LINK_CLIENT_REDIRECT_URL,
         status_code=status.HTTP_307_TEMPORARY_REDIRECT,
     )
     set_session_cookies(response, token_pair)
     return response
-
 
 
 @router.post(
@@ -90,9 +99,11 @@ async def login(
     payload: CredintialLogin,
     session: DatabaseSession,
     service: AuthServiceDep,
-) -> APIResponse[TokenPairResponse]:
-    data = await service.login(payload, session)
-    return APIResponse(success=True, message="Login successful", data=data)
+    response: Response
+) -> Response:
+    token_pair = await service.login(payload, session)
+    set_session_cookies(response, token_pair)
+    return response
 
 @router.post(
     "/refresh",

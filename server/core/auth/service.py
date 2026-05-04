@@ -1,8 +1,11 @@
 from datetime import datetime, timedelta, timezone
+from ipaddress import ip_address
+from posixpath import devnull
 from urllib.parse import urlencode
+from webbrowser import get
 
 import httpx
-from fastapi import HTTPException, status
+from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import config
@@ -16,7 +19,7 @@ from core.auth.schemas import (
     MagicLinkResponse,
     TokenPairResponse,
 )
-from core.auth.utils import calculate_age
+from core.auth.utils import calculate_age, get_client_ip, get_user_agent
 from lib.email.client import client as email_client
 from models.user import AuthSessionMethod, OAuthAccount, OAuthProvider, User
 
@@ -114,6 +117,8 @@ class AuthService:
         token_pair: TokenPairResponse,
         method: AuthSessionMethod,
         session: AsyncSession,
+        ip_address: str | None,
+        user_agent: str | None,
         oauth_account: OAuthAccount | None = None,
     ) -> None:
         await self.repository.create_auth_session(
@@ -123,6 +128,8 @@ class AuthService:
             oauth_account=oauth_account,
             access_token_expires_at=jwt_manager.get_expiration(token_pair.access_token),
             refresh_token_expires_at=jwt_manager.get_expiration(token_pair.refresh_token),
+            ip_address=ip_address,
+            device_info=user_agent,
             session=session,
         )
 
@@ -178,7 +185,7 @@ class AuthService:
 
         return await self.generate_verification_email(user.email, session)
 
-    async def login(self, payload: CredintialLogin, session: AsyncSession) -> TokenPairResponse:
+    async def login(self, payload: CredintialLogin, request: Request, session: AsyncSession) -> TokenPairResponse:
         user = await self.repository.get_user_by_email(payload.email, session)
         if user is None:
             raise HTTPException(
@@ -193,11 +200,16 @@ class AuthService:
             )
 
         token_pair = self._build_auth_response(user)
+        ip = get_client_ip(request)
+        user_agent = get_user_agent(request)
+
         await self._persist_auth_session(
             user=user,
             token_pair=token_pair,
             method=AuthSessionMethod.magic_link,
             session=session,
+            ip_address=ip,
+            user_agent=user_agent,
         )
 
         return token_pair
@@ -233,7 +245,7 @@ class AuthService:
             ),
         )
 
-    async def callback(self, token: str, session: AsyncSession) -> TokenPairResponse:
+    async def callback(self, token: str, request: Request, session: AsyncSession) -> TokenPairResponse | None:
         try:
             verify_token = jwt_manager.decode_token(token, expected_type="magic_link")
         except ValueError as exc:
@@ -261,6 +273,9 @@ class AuthService:
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+        if user.email_verified:
+            return
+
         verified = await self.repository.verify_user_email(user.email, session)
 
         if not verified:
@@ -270,12 +285,18 @@ class AuthService:
             )
 
         token_pair = self._build_auth_response(user)
+        ip = get_client_ip(request)
+        user_agent = get_user_agent(request)
+
         await self._persist_auth_session(
             user=user,
             token_pair=token_pair,
             method=AuthSessionMethod.magic_link,
             session=session,
+            ip_address=ip,
+            user_agent=user_agent,
         )
+
         return token_pair
 
     async def generate_verification_email(self, email: str, session: AsyncSession) -> MagicLinkResponse:

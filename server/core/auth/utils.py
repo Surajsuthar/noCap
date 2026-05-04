@@ -2,6 +2,7 @@ from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING
 
 from fastapi import Response
+from fastapi.requests import Request
 from passlib.context import CryptContext
 
 from config import config
@@ -26,6 +27,19 @@ class Hasher:
     def get_password_hash(password: str) -> str:
         return pwd_context.hash(password)
 
+
+def get_client_ip(request: Request) -> str | None:
+    x_forwarded_for = request.headers.get("x-forwarded-for")
+    if x_forwarded_for:
+        return x_forwarded_for.split(",")[0].strip()
+
+    if request.client:
+            return request.client.host
+
+    return None
+
+def get_user_agent(request: Request) -> str | None:
+    return request.headers.get("user-agent")
 
 ACCESS_TOKEN_COOKIE = "nocap_access_token"
 REFRESH_TOKEN_COOKIE = "nocap_refresh_token"
