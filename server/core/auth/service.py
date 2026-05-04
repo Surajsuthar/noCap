@@ -320,6 +320,7 @@ class AuthService:
         self,
         *,
         code: str,
+        request: Request,
         session: AsyncSession,
     ) -> TokenPairResponse:
         AuthService._require_google_config()
@@ -420,5 +421,7 @@ class AuthService:
             method=AuthSessionMethod.google_oauth,
             oauth_account=oauth_account,
             session=session,
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
         )
         return token_pair

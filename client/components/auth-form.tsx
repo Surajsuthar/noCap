@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { authApi } from "@/lib/auth-api";
 import { loginSchema, registerSchema } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "./ui/input-otp";
 
 type LoginValues = z.input<typeof loginSchema>;
 type RegisterValues = z.input<typeof registerSchema>;
@@ -44,18 +45,23 @@ function MagicLinkSent({
   return (
     <div className="flex flex-col items-center gap-5 py-6 text-center">
       <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
-        <MailCheck size={28} strokeWidth={1.75} />
+        <InputOTP maxLength={6} defaultValue="123456">
+          <InputOTPGroup>
+            <InputOTPSlot index={0} />
+            <InputOTPSlot index={1} />
+            <InputOTPSlot index={2} />
+            <InputOTPSlot index={3} />
+            <InputOTPSlot index={4} />
+            <InputOTPSlot index={5} />
+          </InputOTPGroup>
+        </InputOTP>
       </span>
 
       <div className="flex flex-col gap-1.5">
-        <p className="text-base font-semibold tracking-tight">
-          Check your inbox
-        </p>
+        <Button className="text-base font-semibold tracking-tight">
+          Submit
+        </Button>
         <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
-          We sent a magic link to{" "}
-          <span className="font-medium text-foreground break-all">{email}</span>
-          .
-          <br />
           Click it to verify and get started.
         </p>
       </div>
