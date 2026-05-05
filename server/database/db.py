@@ -36,7 +36,12 @@ def get_engine():
             engine = create_async_engine(
                 _normalize_database_url(config.DATABASE_URL),
                 future=True,
-                pool_size=config.POOL_SIZE
+                pool_pre_ping=True,
+                pool_recycle=1800,
+                pool_size=config.POOL_SIZE,
+                max_overflow=10,
+                pool_timeout=30,
+                echo=False
             )
         except ModuleNotFoundError as exc:
             raise RuntimeError(
