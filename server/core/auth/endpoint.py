@@ -89,7 +89,7 @@ async def callback_from_magic_link(
 
 @router.post(
     "/login",
-    response_model=APIResponse[None],
+    response_model=APIResponse[LoginResponse],
     status_code=status.HTTP_200_OK,
     summary="Login with email and verified user generated OTP",
     # 10 attempts per 15 minutes per IP — brute-force protection.
