@@ -435,14 +435,13 @@ class AuthService:
         """Verify OTP and complete the login process."""
 
         valid = await otp_manager.verify_otp(identifier=identifier, otp=otp)
-        print(f"is_valid: {valid}")
-        if valid:
+        if not valid:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid OTP.",
             )
 
-        user = await self.repository.get_user_by_email(email=identifier, session=session)
+        user = await self.repository.get_user_by_id(identifier, session)
 
         if not user:
             raise HTTPException(

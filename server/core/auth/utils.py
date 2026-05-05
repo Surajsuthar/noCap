@@ -55,15 +55,7 @@ def get_user_agent(request: Request) -> str | None:
 
 def set_session_cookies(response: Response, token_pair: "TokenPairResponse") -> None:
     secure = config.ENVIRONMENT == "prod"
-    response.set_cookie(
-        key=ACCESS_TOKEN_COOKIE,
-        value=token_pair.access_token,
-        max_age=ACCESS_TOKEN_MAX_AGE,
-        httponly=True,
-        secure=secure,
-        samesite="lax",
-        path="/",
-    )
+    set_access_token_cookie(response, token_pair.access_token)
     response.set_cookie(
         key=REFRESH_TOKEN_COOKIE,
         value=token_pair.refresh_token,
@@ -72,6 +64,19 @@ def set_session_cookies(response: Response, token_pair: "TokenPairResponse") -> 
         secure=secure,
         samesite="lax",
         path="/api/auth/refresh",
+    )
+
+
+def set_access_token_cookie(response: Response, access_token: str) -> None:
+    secure = config.ENVIRONMENT == "prod"
+    response.set_cookie(
+        key=ACCESS_TOKEN_COOKIE,
+        value=access_token,
+        max_age=ACCESS_TOKEN_MAX_AGE,
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+        path="/",
     )
 
 
@@ -84,16 +89,16 @@ class OtpManager:
     def __init__(self):
         self.redis_client = get_redis_client()
 
-    async def store_otp(self, identifier: int, otp: str) -> None:
+    async def store_otp(self, identifier: str | int, otp: str) -> None:
         key = f"otp:{identifier}"
         data = {
-            "hash": otp,
+            "otp": otp,
             "attempts": 0
         }
         await self.redis_client.hmset(key, data)
         await self.redis_client.expire(key, OTP_EXPIRY)
 
-    async def verify_otp(self, identifier: str, otp: str) -> bool:
+    async def verify_otp(self, identifier: str | int, otp: str) -> bool:
         key = f"otp:{identifier}"
         data = await self.redis_client.hgetall(key)
 
@@ -103,7 +108,7 @@ class OtpManager:
         if int(data["attempts"]) >= MAX_ATTEMPTS:
             return False
 
-        if otp != data["hash"]:
+        if otp != data["otp"]:
             await self.redis_client.hincrby(key, "attempts", 1)
             return False
 

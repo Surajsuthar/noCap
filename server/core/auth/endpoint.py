@@ -1,7 +1,7 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import APIRouter, Body, Depends, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +23,7 @@ from core.auth.utils import (
     OAUTH_STATE_COOKIE,
     OAUTH_STATE_MAX_AGE,
     REFRESH_TOKEN_COOKIE,
+    set_access_token_cookie,
     set_session_cookies,
 )
 from database.db import get_db
@@ -108,12 +109,12 @@ async def login(
         return error_response(message="Login failed")
 
 @router.post(
-    "/opt-verify",
+    "/otp-verify",
     response_model=APIResponse[None],
     status_code=status.HTTP_200_OK,
-    summary="Opt-in to login verification",
+    summary="Verify login OTP",
 )
-async def opt_in_verification(
+async def verify_login_otp(
     payload: OTPRequest,
     session: DatabaseSession,
     service: AuthServiceDep,
@@ -125,12 +126,13 @@ async def opt_in_verification(
             identifier=payload.identifier,
             request=request,
             otp=payload.otp,
-            session=session
+            session=session,
         )
         set_session_cookies(response, token_pair)
         return success_response(message="Login successfully")
-    except Exception as e:
+    except Exception:
         return error_response(message="Login failed")
+
 
 @router.post(
     "/refresh",
@@ -141,11 +143,18 @@ async def opt_in_verification(
     # but stops token-hammering from a single origin.
 )
 async def refresh(
-    payload: RefreshRequest,
     session: DatabaseSession,
     service: AuthServiceDep,
+    request: Request,
+    response: Response,
+    payload: Annotated[RefreshRequest | None, Body()] = None,
 ) -> APIResponse[AccessTokenResponse]:
-    data = await service.refresh(payload.refresh_token, session)
+    refresh_token = (payload.refresh_token if payload else None) or request.cookies.get(REFRESH_TOKEN_COOKIE)
+    if not refresh_token:
+        return error_response(message="Refresh token is required")
+
+    data = await service.refresh(refresh_token, session)
+    set_access_token_cookie(response, data.access_token)
     return APIResponse(success=True, message="Access token refreshed.", data=data)
 
 
