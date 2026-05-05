@@ -75,9 +75,9 @@ def set_session_cookies(response: Response, token_pair: "TokenPairResponse") -> 
     )
 
 
-def hash_otp() -> str:
+def otp() -> str:
     otp = str(random.randint(100000, 999999))
-    return hashlib.sha256(otp.encode()).hexdigest()
+    return otp
 
 
 class OtpManager:

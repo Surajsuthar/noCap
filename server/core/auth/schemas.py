@@ -76,3 +76,6 @@ class AccessTokenResponse(BaseModel):
 
 class LogoutResponse(BaseModel):
     message: str
+
+class LoginResponse(BaseModel):
+    request_id: int

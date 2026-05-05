@@ -1,7 +1,5 @@
-import re
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
-from uuid import uuid4
 
 import httpx
 from fastapi import HTTPException, Request, status
@@ -23,7 +21,7 @@ from core.auth.utils import (
     calculate_age,
     get_client_ip,
     get_user_agent,
-    hash_otp,
+    otp,
 )
 from lib.email.client import client as email_client
 from models.user import AuthSessionMethod, OAuthAccount, OAuthProvider, User
@@ -206,13 +204,13 @@ class AuthService:
             )
 
 
-        otp = hash_otp()
-        await otp_manager.store_otp(user.id, otp)
+        _otp = otp()
+        await otp_manager.store_otp(user.id, _otp)
 
-        email_client.send_magic_link(
+        email_client.send_otp(
             to=user.email,
             name=user.first_name or user.email,
-            magic_link=otp,
+            otp=_otp,
         )
 
         return user.id
@@ -436,8 +434,9 @@ class AuthService:
     async def verify_otp(self, *, identifier: str, otp: str, request: Request, session: AsyncSession) -> TokenPairResponse:
         """Verify OTP and complete the login process."""
 
-        is_valid = await otp_manager.verify_otp(identifier=identifier, otp=otp)
-        if not is_valid:
+        valid = await otp_manager.verify_otp(identifier=identifier, otp=otp)
+        print(f"is_valid: {valid}")
+        if valid:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid OTP.",

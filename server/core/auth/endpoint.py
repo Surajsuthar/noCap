@@ -10,6 +10,7 @@ from core.auth.schemas import (
     AccessTokenResponse,
     CredintialLogin,
     CredintialRegister,
+    LoginResponse,
     LogoutResponse,
     MagicLinkRequest,
     MagicLinkResponse,
@@ -99,10 +100,10 @@ async def login(
     session: DatabaseSession,
     service: AuthServiceDep,
     request: Request,
-) -> APIResponse[None]:
+) -> APIResponse[LoginResponse]:
     try:
         user_id = await service.login(payload, request, session)
-        return success_response(message="Login successfully", data={"request_id": user_id})
+        return APIResponse(success=True, message="Login successfully", data=LoginResponse(request_id=user_id))
     except Exception:
         return error_response(message="Login failed")
 
@@ -116,10 +117,16 @@ async def opt_in_verification(
     payload: OTPRequest,
     session: DatabaseSession,
     service: AuthServiceDep,
+    request: Request,
     response: Response,
 ) -> APIResponse[None]:
     try:
-        token_pair = await service.verify_otp(identifier=payload.identifier, otp=payload.otp, session=session)
+        token_pair = await service.verify_otp(
+            identifier=payload.identifier,
+            request=request,
+            otp=payload.otp,
+            session=session
+        )
         set_session_cookies(response, token_pair)
         return success_response(message="Login successfully")
     except Exception as e:
