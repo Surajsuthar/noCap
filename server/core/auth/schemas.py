@@ -33,13 +33,20 @@ class MagicLinkRequest(BaseModel):
     email: EmailStr
 
 
+class OTPRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    otp: str
+    identifier: str
+
+
 class MagicLinkResponse(BaseModel):
     message: str
     magic_link: str | None = None
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: str
+    refresh_token: str | None = None
 
 
 class AuthUserResponse(BaseModel):
@@ -69,3 +76,6 @@ class AccessTokenResponse(BaseModel):
 
 class LogoutResponse(BaseModel):
     message: str
+
+class LoginResponse(BaseModel):
+    request_id: int

@@ -9,3 +9,10 @@ class APIResponse(BaseModel, Generic[T]):
     message: str
     data: Optional[T] = None
     error: Optional[str] = None
+
+
+def success_response(data=None, message="OK"):
+    return APIResponse(success=True, message=message, data=data)
+
+def error_response(message="Error"):
+    return APIResponse(success=False, message=message, error=message)

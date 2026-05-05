@@ -1,7 +1,7 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import APIRouter, Body, Depends, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,11 +10,12 @@ from core.auth.schemas import (
     AccessTokenResponse,
     CredintialLogin,
     CredintialRegister,
+    LoginResponse,
     LogoutResponse,
     MagicLinkRequest,
     MagicLinkResponse,
+    OTPRequest,
     RefreshRequest,
-    TokenPairResponse,
 )
 from core.auth.service import AuthService
 from core.auth.utils import (
@@ -22,10 +23,11 @@ from core.auth.utils import (
     OAUTH_STATE_COOKIE,
     OAUTH_STATE_MAX_AGE,
     REFRESH_TOKEN_COOKIE,
+    set_access_token_cookie,
     set_session_cookies,
 )
 from database.db import get_db
-from lib.utils.response import APIResponse
+from lib.utils.response import APIResponse, error_response, success_response
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -42,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 @router.post(
     "/signup",
-    response_model=APIResponse[MagicLinkResponse],
+    response_model=APIResponse[None],
     status_code=status.HTTP_201_CREATED,
     summary="Register a new user and send a magic link",
 )
@@ -50,12 +52,13 @@ async def register(
     payload: CredintialRegister,
     session: DatabaseSession,
     service: AuthServiceDep,
-) -> APIResponse[MagicLinkResponse]:
-    await service.register(payload, session)
-    return APIResponse(
-        success=True,
-        message="User registered successfully. Check your email to continue.",
-    )
+) -> APIResponse[None]:
+    try:
+        await service.register(payload, session)
+    except Exception as e:
+        return error_response(message=str(e))
+
+    return success_response(message="User registered successfully. Check your email to continue.")
 
 
 @router.get(
@@ -67,8 +70,16 @@ async def callback_from_magic_link(
     token: Annotated[str, Query(min_length=1)],
     session: DatabaseSession,
     service: AuthServiceDep,
+    request: Request,
 ) -> RedirectResponse:
-    token_pair = await service.callback(token, session)
+    token_pair = await service.callback(token, request, session)
+
+    if not token_pair:
+        return RedirectResponse(
+            url=config.MAGIC_LINK_CLIENT_REDIRECT_URL,
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+        )
+
     response = RedirectResponse(
         url=config.MAGIC_LINK_CLIENT_REDIRECT_URL,
         status_code=status.HTTP_307_TEMPORARY_REDIRECT,
@@ -77,12 +88,11 @@ async def callback_from_magic_link(
     return response
 
 
-
 @router.post(
     "/login",
-    response_model=APIResponse[MagicLinkResponse],
+    response_model=APIResponse[LoginResponse],
     status_code=status.HTTP_200_OK,
-    summary="Send a sign-in magic link",
+    summary="Login with email and verified user generated OTP",
     # 10 attempts per 15 minutes per IP — brute-force protection.
     # dependencies=[rate_limit(10, 900, namespace="auth:login")],
 )
@@ -90,9 +100,39 @@ async def login(
     payload: CredintialLogin,
     session: DatabaseSession,
     service: AuthServiceDep,
-) -> APIResponse[TokenPairResponse]:
-    data = await service.login(payload, session)
-    return APIResponse(success=True, message="Login successful", data=data)
+    request: Request,
+) -> APIResponse[LoginResponse]:
+    try:
+        user_id = await service.login(payload, request, session)
+        return APIResponse(success=True, message="Login successfully", data=LoginResponse(request_id=user_id))
+    except Exception:
+        return error_response(message="Login failed")
+
+@router.post(
+    "/otp-verify",
+    response_model=APIResponse[None],
+    status_code=status.HTTP_200_OK,
+    summary="Verify login OTP",
+)
+async def verify_login_otp(
+    payload: OTPRequest,
+    session: DatabaseSession,
+    service: AuthServiceDep,
+    request: Request,
+    response: Response,
+) -> APIResponse[None]:
+    try:
+        token_pair = await service.verify_otp(
+            identifier=payload.identifier,
+            request=request,
+            otp=payload.otp,
+            session=session,
+        )
+        set_session_cookies(response, token_pair)
+        return success_response(message="Login successfully")
+    except Exception:
+        return error_response(message="Login failed")
+
 
 @router.post(
     "/refresh",
@@ -103,11 +143,18 @@ async def login(
     # but stops token-hammering from a single origin.
 )
 async def refresh(
-    payload: RefreshRequest,
     session: DatabaseSession,
     service: AuthServiceDep,
+    request: Request,
+    response: Response,
+    payload: Annotated[RefreshRequest | None, Body()] = None,
 ) -> APIResponse[AccessTokenResponse]:
-    data = await service.refresh(payload.refresh_token, session)
+    refresh_token = (payload.refresh_token if payload else None) or request.cookies.get(REFRESH_TOKEN_COOKIE)
+    if not refresh_token:
+        return error_response(message="Refresh token is required")
+
+    data = await service.refresh(refresh_token, session)
+    set_access_token_cookie(response, data.access_token)
     return APIResponse(success=True, message="Access token refreshed.", data=data)
 
 
@@ -122,8 +169,11 @@ async def resend_verification(
     session: DatabaseSession,
     service: AuthServiceDep,
 ) -> APIResponse[MagicLinkResponse]:
-    data = await service.generate_verification_email(payload.email, session)
-    return APIResponse(success=True, message=data.message, data=data)
+    try:
+        data = await service.generate_verification_email(payload.email, session)
+        return APIResponse(success=True, message=data.message )
+    except Exception as e:
+        return APIResponse(success=False, message="Failed to resend verification email", error=str(e))
 
 
 # @router.post(
@@ -206,7 +256,7 @@ async def oauth2_google_callback(
     service: AuthServiceDep,
 ) -> RedirectResponse:
     service.validate_oauth_state(state, request.cookies.get(OAUTH_STATE_COOKIE))
-    token_pair = await service.exchange_google_code(code=code, session=session)
+    token_pair = await service.exchange_google_code(code=code, request=request, session=session)
     redirect = RedirectResponse(
         url=config.MAGIC_LINK_CLIENT_REDIRECT_URL,
         status_code=status.HTTP_307_TEMPORARY_REDIRECT,

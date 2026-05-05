@@ -112,6 +112,13 @@ export async function apiFetch<T>(
     throw new ApiError("Unexpected server response.", response.status);
   }
 
+  if (!payload.success) {
+    throw new ApiError(
+      getErrorMessage(payload, "Something went wrong. Try again."),
+      response.status,
+    );
+  }
+
   return payload as ApiResponse<T>;
 }
 

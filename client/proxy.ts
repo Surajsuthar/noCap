@@ -1,11 +1,42 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
-export default function proxy(req: NextRequest) {
-  return NextResponse.next();
+const ACCESS_TOKEN_COOKIE = "nocap_access_token";
+const REFRESH_TOKEN_COOKIE = "nocap_refresh_token";
+
+export const authRoute = ["/auth", "/"];
+export const protectedRoute = ["/chat"];
+
+function isRouteMatch(pathname: string, routes: string[]) {
+  return routes.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
+  );
 }
 
-export const authRoute = ["/auth"];
-export const protectedRoute = ["/chat"];
+function hasAuthSession(req: NextRequest) {
+  return (
+    req.cookies.has(ACCESS_TOKEN_COOKIE) ||
+    req.cookies.has(REFRESH_TOKEN_COOKIE)
+  );
+}
+
+export default function proxy(req: NextRequest) {
+  const { pathname, search } = req.nextUrl;
+  const isAuthRoute = isRouteMatch(pathname, authRoute);
+  const isProtectedRoute = isRouteMatch(pathname, protectedRoute);
+  const isAuthenticated = hasAuthSession(req);
+
+  if (isAuthRoute && isAuthenticated) {
+    return NextResponse.redirect(new URL("/chat", req.url));
+  }
+
+  if (isProtectedRoute && !isAuthenticated) {
+    const loginUrl = new URL("/auth", req.url);
+    loginUrl.searchParams.set("next", `${pathname}${search}`);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  return NextResponse.next();
+}
 
 export const config = {
   matcher: [

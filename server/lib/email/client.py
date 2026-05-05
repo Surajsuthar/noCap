@@ -3,6 +3,7 @@ from typing import List
 import resend
 
 from config import config
+from lib.email.template.otp_tem import login_otp
 from lib.email.template.sign_up import sign_up_template
 
 
@@ -26,6 +27,13 @@ class EmailClient:
             to=[to],
             subject="Your NoCap magic link",
             html=sign_up_template(name=name, verification_link=magic_link),
+        )
+
+    def send_otp(self, *, to: str, name: str, otp: str):
+        return self._send_email(
+            to=[to],
+            subject="Your NoCap OTP",
+            html=login_otp(name=name, otp=otp),
         )
 
 

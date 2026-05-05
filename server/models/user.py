@@ -12,7 +12,7 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.schema import UniqueConstraint
+from sqlalchemy.schema import Index, UniqueConstraint
 from sqlalchemy.sql.schema import ForeignKey
 
 from database.db import Base
@@ -106,6 +106,10 @@ class OAuthAccount(Base, TimestampMixin):
 
 class AuthSession(Base, TimestampMixin):
     __tablename__ = "auth_sessions"
+    __table_args__ = (
+        Index("ix_auth_sessions_access_token", "access_token", unique=True),
+        Index("ix_auth_sessions_refresh_token", "refresh_token", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(
         BigInteger,
@@ -126,9 +130,20 @@ class AuthSession(Base, TimestampMixin):
     method: Mapped[AuthSessionMethod] = mapped_column(String(50), nullable=False)
     access_token: Mapped[str] = mapped_column(Text, nullable=False)
     refresh_token: Mapped[str] = mapped_column(Text, nullable=False)
-    access_token_expires_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
-    refresh_token_expires_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    access_token_expires_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    refresh_token_expires_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    device_info: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
 
     user: Mapped[User] = relationship("User", backref="auth_sessions")
     oauth_account: Mapped[OAuthAccount | None] = relationship("OAuthAccount", backref="auth_sessions")
+
+    @property
+    def is_valid(self) -> bool:
+        now = datetime.now(timezone.utc)
+        return self.revoked_at is None and self.refresh_token_expires_at > now
+
+    @property
+    def is_access_token_expired(self) -> bool:
+        return datetime.now(timezone.utc) > self.access_token_expires_at

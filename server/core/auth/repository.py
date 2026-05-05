@@ -5,7 +5,13 @@ from sqlalchemy import exists, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.user import AuthSession, AuthSessionMethod, OAuthAccount, OAuthProvider, User
+from models.user import (
+    AuthSession,
+    AuthSessionMethod,
+    OAuthAccount,
+    OAuthProvider,
+    User,
+)
 
 if TYPE_CHECKING:
     from core.auth.schemas import TokenPairResponse
@@ -226,6 +232,8 @@ class AuthRepository:
         token_pair: "TokenPairResponse",
         method: AuthSessionMethod,
         access_token_expires_at: datetime | None,
+        ip_address: str | None,
+        device_info: str | None,
         refresh_token_expires_at: datetime | None,
         session: AsyncSession,
         oauth_account: OAuthAccount | None = None,
@@ -238,6 +246,8 @@ class AuthRepository:
             refresh_token=token_pair.refresh_token,
             access_token_expires_at=access_token_expires_at,
             refresh_token_expires_at=refresh_token_expires_at,
+            ip_address=ip_address,
+            device_info=device_info,
         )
         session.add(auth_session)
         try:

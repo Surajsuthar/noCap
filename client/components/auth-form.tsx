@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { MailCheck } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import type { z } from "zod";
@@ -24,12 +25,23 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  useLoginMutation,
+  useRegisterMutation,
+  useResendMagicLinkMutation,
+  useVerifyOtpMutation,
+} from "@/hooks/use-auth";
 import { authApi } from "@/lib/auth-api";
 import { loginSchema, registerSchema } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "./ui/input-otp";
 
 type LoginValues = z.input<typeof loginSchema>;
 type RegisterValues = z.input<typeof registerSchema>;
+type LoginChallenge = {
+  email: string;
+  requestId: string;
+};
 
 /* ─── shared "magic link sent" confirmation ─── */
 function MagicLinkSent({
@@ -44,19 +56,16 @@ function MagicLinkSent({
   return (
     <div className="flex flex-col items-center gap-5 py-6 text-center">
       <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
-        <MailCheck size={28} strokeWidth={1.75} />
+        <MailCheck className="h-7 w-7" aria-hidden="true" />
       </span>
 
       <div className="flex flex-col gap-1.5">
-        <p className="text-base font-semibold tracking-tight">
+        <h3 className="text-base font-semibold tracking-tight">
           Check your inbox
-        </p>
+        </h3>
         <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
-          We sent a magic link to{" "}
-          <span className="font-medium text-foreground break-all">{email}</span>
-          .
-          <br />
-          Click it to verify and get started.
+          We sent a verification link to {email}. Click it to verify and get
+          started.
         </p>
       </div>
 
@@ -73,6 +82,91 @@ function MagicLinkSent({
           </button>{" "}
           or check your spam folder.
         </p>
+      </div>
+    </div>
+  );
+}
+
+function OtpChallenge({
+  challenge,
+  error,
+  isVerifying,
+  isResending,
+  onSubmit,
+  onResend,
+  onChangeEmail,
+}: {
+  challenge: LoginChallenge;
+  error: string | null;
+  isVerifying: boolean;
+  isResending: boolean;
+  onSubmit: (otp: string) => void;
+  onResend: () => void;
+  onChangeEmail: () => void;
+}) {
+  const [otp, setOtp] = useState("");
+
+  return (
+    <div className="flex flex-col items-center gap-5 py-6 text-center">
+      <div className="flex flex-col gap-1.5">
+        <h3 className="text-base font-semibold tracking-tight">
+          Enter your login code
+        </h3>
+        <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
+          We sent a 6-digit OTP to {challenge.email}. It expires in 5 minutes.
+        </p>
+      </div>
+
+      <form
+        className="flex w-full flex-col items-center gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (otp.length === 6) {
+            onSubmit(otp);
+          }
+        }}
+      >
+        <InputOTP maxLength={6} value={otp} onChange={setOtp}>
+          <InputOTPGroup>
+            <InputOTPSlot index={0} />
+            <InputOTPSlot index={1} />
+            <InputOTPSlot index={2} />
+            <InputOTPSlot index={3} />
+            <InputOTPSlot index={4} />
+            <InputOTPSlot index={5} />
+          </InputOTPGroup>
+        </InputOTP>
+
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={isVerifying || otp.length !== 6}
+        >
+          {isVerifying ? "Verifying..." : "Verify and enter"}
+        </Button>
+      </form>
+
+      <AuthError message={error} />
+
+      <div className="flex flex-col gap-2 w-full pt-1">
+        <p className="text-xs text-muted-foreground">
+          Didn't receive it?{" "}
+          <button
+            type="button"
+            onClick={onResend}
+            disabled={isResending}
+            className="font-medium text-primary underline-offset-4 hover:underline disabled:opacity-60"
+          >
+            {isResending ? "Resending..." : "Resend OTP"}
+          </button>
+        </p>
+        <button
+          type="button"
+          onClick={onChangeEmail}
+          className="text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+        >
+          Use a different email
+        </button>
       </div>
     </div>
   );
@@ -98,48 +192,79 @@ export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  const [sentTo, setSentTo] = useState<string | null>(null);
+  const router = useRouter();
+  const [challenge, setChallenge] = useState<LoginChallenge | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isResending, setIsResending] = useState(false);
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "" },
   });
 
+  const loginMutation = useLoginMutation((response, variables) => {
+    if (!response.data?.request_id) {
+      setError("The server did not return a login request id.");
+      return;
+    }
+
+    setChallenge({
+      email: variables.email,
+      requestId: String(response.data.request_id),
+    });
+  });
+
+  const verifyOtpMutation = useVerifyOtpMutation(() => {
+    router.replace("/chat");
+  });
+
   async function onSubmit(values: LoginValues) {
     setError(null);
 
     try {
-      await authApi.login(values);
-      setSentTo(values.email);
+      await loginMutation.mutateAsync(values);
     } catch (error) {
       setError(
         error instanceof Error
           ? error.message
-          : "We could not send the magic link. Try again.",
+          : "We could not send the OTP. Try again.",
       );
     }
   }
 
-  async function resendMagicLink() {
-    if (!sentTo) {
+  async function verifyOtp(otp: string) {
+    if (!challenge) {
       return;
     }
 
     setError(null);
-    setIsResending(true);
 
     try {
-      await authApi.resendMagicLink({ email: sentTo });
+      await verifyOtpMutation.mutateAsync({
+        identifier: challenge.requestId,
+        otp,
+      });
     } catch (error) {
       setError(
         error instanceof Error
           ? error.message
-          : "We could not resend the magic link. Try again.",
+          : "We could not verify that OTP. Try again.",
       );
-    } finally {
-      setIsResending(false);
+    }
+  }
+
+  async function resendOtp() {
+    if (!challenge) {
+      return;
+    }
+
+    setError(null);
+
+    try {
+      await loginMutation.mutateAsync({ email: challenge.email });
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "We could not resend the OTP.",
+      );
     }
   }
 
@@ -160,15 +285,19 @@ export function LoginForm({
         </CardHeader>
 
         <CardContent>
-          {sentTo ? (
-            <div className="flex flex-col gap-4">
-              <MagicLinkSent
-                email={sentTo}
-                isResending={isResending}
-                onResend={resendMagicLink}
-              />
-              <AuthError message={error} />
-            </div>
+          {challenge ? (
+            <OtpChallenge
+              challenge={challenge}
+              error={error}
+              isResending={loginMutation.isPending}
+              isVerifying={verifyOtpMutation.isPending}
+              onChangeEmail={() => {
+                setChallenge(null);
+                setError(null);
+              }}
+              onResend={resendOtp}
+              onSubmit={verifyOtp}
+            />
           ) : (
             <Form {...form}>
               <form
@@ -201,9 +330,9 @@ export function LoginForm({
                   <Button
                     type="submit"
                     className="w-full"
-                    disabled={form.formState.isSubmitting}
+                    disabled={loginMutation.isPending}
                   >
-                    {form.formState.isSubmitting ? "Sending..." : "Login"}
+                    {loginMutation.isPending ? "Sending..." : "Login"}
                   </Button>
                   <div className="relative flex items-center gap-3">
                     <div className="h-px flex-1 bg-border" />
@@ -224,7 +353,7 @@ export function LoginForm({
             </Form>
           )}
 
-          {!sentTo && (
+          {!challenge && (
             <p className="mt-6 text-center text-xs text-muted-foreground">
               No account?{" "}
               <Link
@@ -266,7 +395,6 @@ export function RegisterForm({
 }: React.ComponentProps<"div">) {
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isResending, setIsResending] = useState(false);
 
   const form = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),
@@ -278,12 +406,16 @@ export function RegisterForm({
     },
   });
 
+  const registerMutation = useRegisterMutation((_response, variables) => {
+    setSentTo(variables.email);
+  });
+  const resendMagicLinkMutation = useResendMagicLinkMutation();
+
   async function onSubmit(values: RegisterValues) {
     setError(null);
 
     try {
-      await authApi.register(values);
-      setSentTo(values.email);
+      await registerMutation.mutateAsync(values);
     } catch (error) {
       setError(
         error instanceof Error
@@ -299,18 +431,15 @@ export function RegisterForm({
     }
 
     setError(null);
-    setIsResending(true);
 
     try {
-      await authApi.resendMagicLink({ email: sentTo });
+      await resendMagicLinkMutation.mutateAsync({ email: sentTo });
     } catch (error) {
       setError(
         error instanceof Error
           ? error.message
           : "We could not resend the magic link. Try again.",
       );
-    } finally {
-      setIsResending(false);
     }
   }
 
@@ -335,7 +464,7 @@ export function RegisterForm({
             <div className="flex flex-col gap-4">
               <MagicLinkSent
                 email={sentTo}
-                isResending={isResending}
+                isResending={resendMagicLinkMutation.isPending}
                 onResend={resendMagicLink}
               />
               <AuthError message={error} />
@@ -435,9 +564,9 @@ export function RegisterForm({
                   <Button
                     type="submit"
                     className="w-full"
-                    disabled={form.formState.isSubmitting}
+                    disabled={registerMutation.isPending}
                   >
-                    {form.formState.isSubmitting
+                    {registerMutation.isPending
                       ? "Creating..."
                       : "Create account"}
                   </Button>
