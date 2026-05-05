@@ -5,8 +5,22 @@ type MagicLinkResponse = {
   magic_link?: string | null;
 };
 
+export type LoginResponse = {
+  request_id: number;
+};
+
+export type AccessTokenResponse = {
+  access_token: string;
+  token_type: string;
+};
+
 export type LoginPayload = {
   email: string;
+};
+
+export type OtpVerifyPayload = {
+  identifier: string;
+  otp: string;
 };
 
 export type RegisterPayload = {
@@ -18,7 +32,14 @@ export type RegisterPayload = {
 
 export const authApi = {
   login(payload: LoginPayload) {
-    return apiFetch<MagicLinkResponse>("/api/auth/login", {
+    return apiFetch<LoginResponse>("/api/auth/login", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
+  verifyOtp(payload: OtpVerifyPayload) {
+    return apiFetch<null>("/api/auth/otp-verify", {
       method: "POST",
       body: payload,
     });
@@ -35,6 +56,18 @@ export const authApi = {
     return apiFetch<MagicLinkResponse>("/api/auth/resend", {
       method: "POST",
       body: payload,
+    });
+  },
+
+  refresh() {
+    return apiFetch<AccessTokenResponse>("/api/auth/refresh", {
+      method: "POST",
+    });
+  },
+
+  logout() {
+    return apiFetch<null>("/api/auth/logout", {
+      method: "POST",
     });
   },
 
