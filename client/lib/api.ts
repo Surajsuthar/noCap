@@ -1,3 +1,5 @@
+import { env } from "@/env";
+
 type ApiResponse<T> = {
   success: boolean;
   message: string;
@@ -9,9 +11,7 @@ type ApiFetchOptions = Omit<RequestInit, "body"> & {
   body?: unknown;
 };
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ??
-  "http://localhost:8000";
+const API_BASE_URL = env.NEXT_PUBLIC_API_BASE_URL.replace(/\/$/, "");
 
 function formatApiDetail(detail: unknown): string | null {
   if (typeof detail === "string") {
